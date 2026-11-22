@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Backup tool: dumps once from OUTSIDE FM (no BepInEx needed), using the same code.
+    Build:  dotnet publish cli -c Release
+    Output: cli/bin/publish/TrueDoF.Cli.exe   (one self-contained file, Windows x64)
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>TrueDoF.Cli</AssemblyName>
+    <RootNamespace>TrueDoF</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DebugType>none</DebugType>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\</OutputPath>
+    <PublishDir>bin\publish\</PublishDir>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\core\*.cs" Exclude="..\core\Hotkey.cs" />
+  </ItemGroup>
+
+</Project>

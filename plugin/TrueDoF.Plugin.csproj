@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    TrueDoF BepInEx 6 (IL2CPP) plugin for Football Manager 27.
+    Build:   dotnet build plugin -c Release
+    Output:  plugin/bin/TrueDoF.dll  (copied into FM automatically if FM is found, see below)
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>TrueDoF</AssemblyName>
+    <RootNamespace>TrueDoF</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DebugType>none</DebugType>                         <!-- no build paths baked into the DLL -->
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>bin\</OutputPath>
+
+    <!-- Your FM27 folder. Override with: dotnet build plugin -c Release -p:FMDir="D:\Games\Football Manager 27" -->
+    <FMDir Condition="'$(FMDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Football Manager 27</FMDir>
+  </PropertyGroup>
+
+  <!-- All real logic lives in ../core (shared with the CLI and the self-test). -->
+  <ItemGroup>
+    <Compile Include="..\core\*.cs" />
+  </ItemGroup>
+
+  <!-- BepInEx is already in FM's folder, so we only compile against it (ExcludeAssets=runtime: nothing gets copied). -->
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.790" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Convenience: copy the DLL straight into FM if BepInEx is installed there. -->
+  <Target Name="CopyToFM" AfterTargets="Build" Condition="Exists('$(FMDir)\BepInEx\plugins')">
+    <Copy SourceFiles="$(OutputPath)TrueDoF.dll" DestinationFolder="$(FMDir)\BepInEx\plugins" />
+    <Message Importance="high" Text="TrueDoF.dll copied to $(FMDir)\BepInEx\plugins" />
+  </Target>
+
+</Project>
