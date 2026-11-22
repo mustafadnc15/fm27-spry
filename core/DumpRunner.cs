@@ -249,7 +249,7 @@ public static class DumpRunner
                 sb.AppendLine("Sample squad players (compare with FM's squad screen):");
                 foreach (var p in dump.Squad.Take(8))
                     sb.AppendLine($"  {p.Name} | age {p.Age} | CA {p.Ca} PA {p.Pa} | {string.Join("/", p.NaturalPositions)} | " +
-                                  $"wage £{p.Contract?.WageWeekly:N0}/w until {p.Contract?.Expires} | morale raw {p.MoraleRaw}");
+                                  $"wage £{p.Contract?.WageWeekly:N0}/w until {p.Contract?.Expires} | morale {p.Morale} ({p.MoraleLevel})");
             }
             WriteAtomic(Path.Combine(s.OutDir, "diagnostics.txt"), sb.ToString());
         }

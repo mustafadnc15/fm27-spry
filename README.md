@@ -110,17 +110,17 @@ writes the same files.
 | Contract: weekly wage, expiry, squad number, transfer/loan-listed flags | ✅ |
 | Value, asking price, reputation, height, preferred foot | ✅ |
 | Players on loan to you / loaned out | ✅ (loaned-out players show a note) |
-| Wage bill | ✅ computed from player contracts (staff wages not included) |
+| Wage bill | ✅ computed from player contracts, plus FM's own wage total |
 | Transfer activity (completed / agreed deals involving you or your shortlist) | ✅ no fees |
-| Morale | ⚠️ raw number only, not yet verified (`moraleRaw`) |
-| Balance, transfer budget, wage budget | ❌ not mapped yet: use the probe |
+| Morale | ✅ 1–20 plus a word (10 = okay, 13 = good, 20 = superb) |
+| Balance, transfer budget, wage budget (weekly) | ✅ |
 | League table | ❌ not mapped yet: use the probe |
 | FM's own shortlist | ❌ use `shortlist.txt` |
 
 Money is always **pounds (GBP)**. That's how FM stores it internally, whatever currency
 you see in the game.
 
-### The probe: helping TrueDoF find finances and the league table
+### The probe: helping TrueDoF find the league table
 
 1. In FM, set the currency to pounds (Preferences → Units → Currency).
 2. Note your **exact** balance, transfer budget and wage budget from the Finances screen,
@@ -163,4 +163,4 @@ dotnet run --project tests/SelfTest -c Release
 ```
 
 The memory layout is documented in `docs/how-fmsuperscout-reads-data.md`, and all offsets
-live in `core/Layout.cs`.
+live in `core/Layout.cs`. See `docs/credits.md` for where each offset came from.

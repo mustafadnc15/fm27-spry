@@ -26,7 +26,7 @@ public sealed class Layout
     public int Ca = 0x264, Pa = 0x266;                       // u16, true 1..200
     public int HomeRep = 0x25E, CurRep = 0x260, WorldRep = 0x262;
     public int Condition = 0x258;                            // u16, UNVERIFIED
-    public int Morale = 0x26C;                               // byte, UNVERIFIED
+    public int Morale = 0x26C;                               // byte 1..20 (10 Okay, 13 Good, 20 Perfect)
     public int Height = 0x22E;                               // u16 cm
     public int Positions = 0x150;                            // 15 bytes, 1..20 (20 = natural)
     public int Attrs = 0x15F;                                // bytes stored x5
@@ -52,6 +52,17 @@ public sealed class Layout
     public int TeamManager = 0x80, TeamRep = 0xA8, TeamComp = 0x50, TeamCompAlt = 0x60;
     public int TeamSchedule = 0xA0, ScheduleNextMatch = 0x94, ScheduleNextMatchAlt = 0x18;
     public int CompName = 0x40, CompShortName = 0x48;
+
+    // ---- Club finances: [club + ClubFinance] → finance record (i32 pounds) ----
+    // Source: FMLibreEditor, FM OpenEditor and fm-editor (all GPL-3.0) document these FM27
+    // offsets independently; only the numbers are used here, no code. Your own probe found
+    // the balance at the same place. Small clubs in leagues you don't play have a smaller
+    // finance record, so values are sanity-checked before use.
+    public int ClubFinance = 0x150;
+    public int FinBalance = 0x0C;           // i32 £
+    public int FinTransferBudget = 0x7C4;   // i32 £
+    public int FinWageBudget = 0x808;       // i32 £ per week
+    public int FinWageSpend = 0x814;        // i32 £ per week: FM's own current wage total incl. bonuses
 
     // ---- Transfer deal records (no vtable; recognised by two marker values) ----
     public int DealPerson = 0x00, DealToTeam = 0x08, DealFromTeam = 0x18;

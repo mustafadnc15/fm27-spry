@@ -37,11 +37,12 @@ public sealed class ClubInfo
     public string ShortName;
     public string League;
     public int? Reputation;           // first-team reputation, ~0..10000
-    // Finances: not mapped yet (use the probe, see README). Always null for now.
+    // Finances straight from FM (null = could not be read / did not look sane).
     public long? Balance;
     public long? TransferBudget;
     public long? WageBudgetWeekly;
-    public bool FinancesMapped = false;
+    public long? WageSpendWeekly;     // FM's own "current wage total (incl. bonuses)"
+    public bool FinancesMapped;
     // Computed by TrueDoF from player contracts (staff wages not included).
     public long WageBillWeekly;
     public long WageBillAnnual;
@@ -86,7 +87,8 @@ public sealed class PlayerInfo
     public long? ValueGbp;
     public long? AskingPriceGbp;
     public int? ReputationCurrent, ReputationHome, ReputationWorld;
-    public int? MoraleRaw;        // UNVERIFIED offset: raw byte, meaning not confirmed yet
+    public int? Morale;           // 1..20 (10 = Okay, 13 = Good, 20 = Perfect)
+    public string MoraleLevel;    // very poor / poor / okay / good / very good / superb
     public int? ConditionRaw;     // UNVERIFIED offset: raw value
     public List<string> Notes = new();
 }
@@ -103,7 +105,7 @@ public sealed class LeagueTableInfo
 {
     public bool Mapped = false;
     public string Competition;
-    public string Note = "League table offsets are not mapped yet. Run the probe (README) with your points and goal difference.";
+    public string Note = "League table is not mapped yet (no open-source editor has it either). Run the probe (README) with your points and goal difference.";
     public List<LeagueRow> Rows = new();
 }
 

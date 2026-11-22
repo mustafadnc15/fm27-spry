@@ -70,7 +70,12 @@ public sealed class PlayerReader
         p.ReputationHome = Rep(_m.U16(block + (ulong)L.HomeRep));
         p.ReputationCurrent = Rep(_m.U16(block + (ulong)L.CurRep));
         p.ReputationWorld = Rep(_m.U16(block + (ulong)L.WorldRep));
-        p.MoraleRaw = _m.U8(block + (ulong)L.Morale);
+        int morale = _m.U8(block + (ulong)L.Morale);
+        if (morale is >= 1 and <= 20)
+        {
+            p.Morale = morale;
+            p.MoraleLevel = morale switch { <= 4 => "very poor", <= 7 => "poor", <= 10 => "okay", <= 14 => "good", <= 17 => "very good", _ => "superb" };
+        }
         p.ConditionRaw = _m.U16(block + (ulong)L.Condition);
 
         ulong con = _m.Ptr(person + (ulong)L.Contract);

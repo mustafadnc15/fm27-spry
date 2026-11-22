@@ -131,7 +131,9 @@ public sealed class ClubDumper
             club.WageBillWeekly += p.Contract?.WageWeekly ?? 0;
         }
         club.WageBillAnnual = club.WageBillWeekly * 52;
-        dump.Notes.Add("Wage bill = player wages only (staff wages are not included). Club balance and budgets are not mapped yet.");
+        ReadFinances(me.club, club);
+        dump.Notes.Add("wageBillWeekly = sum of player contracts (computed by TrueDoF); wageSpendWeekly = FM's own wage total incl. bonuses and staff.");
+        if (!club.FinancesMapped) dump.Notes.Add("Club finances could not be read for this club.");
         _diag.Add($"Club {club.Name}: {teams.Count} teams, {listedIn.Count} listed players, {contractedSet.Count} contracted players.");
 
         // ---------- 6. Shortlist ----------
@@ -141,6 +143,31 @@ public sealed class ClubDumper
         ReadTransfers(dump, reader, teams.Select(t => t.ptr).ToHashSet(), shortlistUids);
 
         return ctx;
+    }
+
+    private void ReadFinances(ulong clubPtr, ClubInfo club)
+    {
+        ulong fin = _m.Ptr(clubPtr + (ulong)L.ClubFinance);
+        if (fin == 0) { _diag.Add("Finance record pointer is empty."); return; }
+        int balance = _m.I32(fin + (ulong)L.FinBalance);
+        int transfer = _m.I32(fin + (ulong)L.FinTransferBudget);
+        int wage = _m.I32(fin + (ulong)L.FinWageBudget);
+        int spend = _m.I32(fin + (ulong)L.FinWageSpend);
+        _diag.Add($"Finance record @0x{fin:X}: balance {balance:N0}, transfer budget {transfer:N0}, wage budget {wage:N0}/w, wage spend {spend:N0}/w");
+        if (!LooksLikeDate(balance)) club.Balance = balance;
+        club.TransferBudget = Budget(transfer);
+        club.WageBudgetWeekly = Budget(wage);
+        club.WageSpendWeekly = Budget(spend);
+        club.FinancesMapped = club.Balance != null || club.TransferBudget != null;
+    }
+
+    /// <summary>A budget is 0..1 billion pounds and not an FM date stored in the same spot by smaller finance records.</summary>
+    private static long? Budget(int v) => v >= 0 && v < 1_000_000_000 && !LooksLikeDate(v) ? v : null;
+
+    private static bool LooksLikeDate(int v)
+    {
+        int year = (int)((uint)v >> 16), doy = v & 0x1FF;
+        return year is >= 1900 and <= 2100 && doy is >= 1 and <= 366;
     }
 
     private PlayerInfo SafeRead(PlayerReader reader, PlayerRef r)

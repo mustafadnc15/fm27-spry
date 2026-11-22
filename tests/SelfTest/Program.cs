@@ -45,7 +45,11 @@ public static class Program
         Check("league", club.GetProperty("league").GetString() == "Test Premier League");
         Check("reputation", club.GetProperty("reputation").GetInt32() == 6500);
         Check("two teams", club.GetProperty("teams").GetArrayLength() == 2);
-        Check("finances not mapped", club.GetProperty("balance").ValueKind == JsonValueKind.Null);
+        Check("balance (negative allowed)", club.GetProperty("balance").GetInt64() == -1_250_000);
+        Check("transfer budget", club.GetProperty("transferBudget").GetInt64() == 40_086);
+        Check("wage budget", club.GetProperty("wageBudgetWeekly").GetInt64() == 60_989);
+        Check("date-like value rejected", club.GetProperty("wageSpendWeekly").ValueKind == JsonValueKind.Null);
+        Check("finances mapped", club.GetProperty("financesMapped").GetBoolean());
         // contracted to us: Ace, Bee, Youth, Away (not the loanee) = 50k + 20k + 1k + 5k
         Check("wage bill weekly", club.GetProperty("wageBillWeekly").GetInt64() == 76_000);
         Check("wage bill annual", club.GetProperty("wageBillAnnual").GetInt64() == 76_000 * 52);
@@ -69,6 +73,7 @@ public static class Program
                                   && ace.GetProperty("contract").GetProperty("transferListed").GetBoolean());
             Check("ace nationality", ace.GetProperty("nationality").GetString() == "Testland");
             Check("ace first team", ace.GetProperty("team").GetString() == "first team");
+            Check("ace morale 7 = poor", ace.GetProperty("morale").GetInt32() == 7 && ace.GetProperty("moraleLevel").GetString() == "poor");
         }
         Check("bee found (indirect list entry)", squad.Any(p => p.GetProperty("name").GetString() == "Bee Keeper"));
         var loanee = squad.FirstOrDefault(p => p.GetProperty("name").GetString() == "Lou Nee");
@@ -169,6 +174,14 @@ public static class Program
             var (us, usTeams) = MakeClub("Testford United", "Testford", new[] { 0, 10 }, comp, gameDate, 6500);
             var (rival, rivalTeams) = MakeClub("Rival FC", "Rival", new[] { 0 }, comp, gameDate, 5000);
             ulong other = MakeClub("Third Club", "Third", new[] { 0 }, comp, gameDate, 3000).teams[0];
+
+            // Real finance record at club+0x150
+            ulong finance = _heap.Alloc(0x900);
+            _heap.W32(finance + (ulong)L.FinBalance, unchecked((uint)-1_250_000));     // in debt
+            _heap.W32(finance + (ulong)L.FinTransferBudget, 40_086);
+            _heap.W32(finance + (ulong)L.FinWageBudget, 60_989);
+            _heap.W32(finance + (ulong)L.FinWageSpend, FmDate.FromDate(new DateTime(2027, 1, 1)));   // a date: must be rejected
+            _heap.W64(us + (ulong)L.ClubFinance, finance);
 
             // Finance value hidden one pointer away from the club, for the probe test
             ulong fin = _fin = _heap.Alloc(0x80);
