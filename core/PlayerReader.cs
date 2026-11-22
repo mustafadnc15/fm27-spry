@@ -151,13 +151,14 @@ public sealed class PlayerReader
     /// <summary>
     /// FM27's words for the morale byte, as shown in the squad screen's Morale column (English).
     /// 2-3 and 5-14 from fm-editor's check against FM, 15 from FMLibreEditor,
-    /// 16, 17 and 20 confirmed in the user's own save. 1, 4, 18 and 19 are not witnessed yet.
+    /// 16-20 confirmed in the user's own save. Only 1 and 4 are not witnessed yet.
     /// </summary>
     public static readonly Dictionary<int, string> MoraleWords = new()
     {
         [2] = "Extremely Poor", [3] = "Very Poor", [5] = "Quite Poor", [6] = "Fairly Poor", [7] = "Slightly Poor",
         [8] = "Fair", [9] = "Fairly Okay", [10] = "Okay", [11] = "Fairly Good", [12] = "Quite Good", [13] = "Good",
-        [14] = "Really Good", [15] = "Very Good", [16] = "Extremely Good", [17] = "Excellent", [20] = "Perfect",
+        [14] = "Really Good", [15] = "Very Good", [16] = "Extremely Good", [17] = "Excellent",
+        [18] = "Superb", [19] = "Exceptional", [20] = "Perfect",
     };
 
     public static string MoraleWord(int v)

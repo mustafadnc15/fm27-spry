@@ -112,7 +112,7 @@ writes the same files.
 | Players on loan to you / loaned out | ✅ (loaned-out players show a note) |
 | Wage bill | ✅ computed from player contracts, plus FM's own wage total |
 | Transfer activity (completed / agreed deals involving you or your shortlist) | ✅ no fees |
-| Morale | ✅ 1–20 plus FM's own word (10 = Okay, 13 = Good, 17 = Excellent, 20 = Perfect) |
+| Morale | ✅ 1–20 plus FM's own word (10 = Okay, 13 = Good, 17 = Excellent, 18 = Superb, 19 = Exceptional, 20 = Perfect) |
 | Balance, transfer budget, wage budget (weekly) | ✅ |
 | League table | ❌ not mapped yet: use the probe |
 | FM's own shortlist | ❌ use `shortlist.txt` |

@@ -124,7 +124,7 @@ public static class Program
         // ---- Small helpers ----
         Check("hotkey parse Ctrl+F8", Hotkey.Parse("Ctrl+F8") is { Ctrl: true, VirtualKey: 0x77 });
         Check("hotkey parse rubbish", Hotkey.Parse("Banana") == null);
-        Check("morale words", PlayerReader.MoraleWord(17) == "Excellent" && PlayerReader.MoraleWord(18) == "between Excellent and Perfect");
+        Check("morale words", PlayerReader.MoraleWord(17) == "Excellent" && PlayerReader.MoraleWord(19) == "Exceptional" && PlayerReader.MoraleWord(4) == "between Very Poor and Quite Poor");
         Check("normalize accents", Shortlist.Normalize("Martin Ødegaard ") == "martin odegaard");
         Check("probe value parse", Probe.ParseValues("balance=12,500,000; points=~24").Count == 2 && Probe.ParseValues("x=~5")[0].approx);
 
