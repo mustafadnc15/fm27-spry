@@ -1,0 +1,14 @@
+# Reference project: study only, never commit
+reference/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+bin/
+obj/
+dist/
+node_modules/
+*.user
