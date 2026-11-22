@@ -26,7 +26,8 @@ public static class Program
         File.WriteAllText(Path.Combine(outDir, "shortlist.txt"),
             "# test shortlist\nTest Striker\nStriker @ rival\nNobody Here\nuid:" + w.YouthUid + "\n");
 
-        var s = new Settings { Host = "selftest", OutDir = outDir, ProbeEnabled = true, ProbeValues = "balance=12,345,678; points=31" };
+        var s = new Settings { Host = "selftest", OutDir = outDir, ProbeEnabled = true, ProbeValues = "balance=12,345,678; points=31",
+                                 ProbeInspect = "firstTeam; firstTeam +0x38" };
         Check("dump succeeds", DumpRunner.RunNow(w.Memory, s));
 
         var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(outDir, "dump-latest.json"))).RootElement;
@@ -91,8 +92,20 @@ public static class Program
         Check("outgoing completed", transfers.Any(t => t.GetProperty("player").GetString() == "Ace Player" && t.GetProperty("status").GetString() == "completed" && t.GetProperty("to").GetString() == "Rival FC"));
 
         string probe = File.ReadAllText(Path.Combine(outDir, "probe.txt"));
-        Check("probe finds balance path", probe.Contains("club +0x1A0 → +0x40  [int32]") || probe.Contains("club +0x1A0 → +0x40  [int64]"));
-        Check("probe finds points", probe.Contains("competition +0x"));
+        Check("probe finds balance path", probe.Contains("club +0x1A0 +0x40  [int32]"));
+        Check("probe finds points", probe.Contains("competition +0x30  [int32]"));
+        Check("inspect labels club pointer", probe.Contains("club: Testford United"));
+        Check("inspect labels player pointer", probe.Contains("player: Ace Player"));
+        Check("full hit list written", File.Exists(Path.Combine(outDir, "probe-all.txt")));
+
+        // Second probe after the balance "changed in the game": the real field is CONFIRMED.
+        w.SetBalance(13_000_000);
+        s.ProbeValues = "balance=13000000; points=31";
+        Check("second dump succeeds", DumpRunner.RunNow(w.Memory, s));
+        probe = File.ReadAllText(Path.Combine(outDir, "probe.txt"));
+        int conf = probe.IndexOf("CONFIRMED", StringComparison.Ordinal);
+        Check("probe compare confirms balance field", conf > 0 && probe.IndexOf("club +0x1A0 +0x40  [int32]", conf, StringComparison.Ordinal) > conf);
+        Check("probe notes unchanged value", probe.Contains("Same value as last time"));
         Check("diagnostics written", File.ReadAllText(Path.Combine(outDir, "diagnostics.txt")).Contains("0x0288"));
 
         // ---- Failure case: FM still starting (no game_plugin.dll) must keep the old dump ----
@@ -107,7 +120,7 @@ public static class Program
         Check("hotkey parse Ctrl+F8", Hotkey.Parse("Ctrl+F8") is { Ctrl: true, VirtualKey: 0x77 });
         Check("hotkey parse rubbish", Hotkey.Parse("Banana") == null);
         Check("normalize accents", Shortlist.Normalize("Martin Ødegaard ") == "martin odegaard");
-        Check("probe value parse", Probe.ParseValues("balance=12,500,000; points=24").Count == 2);
+        Check("probe value parse", Probe.ParseValues("balance=12,500,000; points=~24").Count == 2 && Probe.ParseValues("x=~5")[0].approx);
 
         Console.WriteLine(_failures == 0 ? "\nALL SELF-TESTS PASSED" : $"\n{_failures} SELF-TEST(S) FAILED");
         Console.WriteLine($"Sample output kept in {outDir}");
@@ -130,7 +143,8 @@ public static class Program
         private uint _nextUid = 1000;
         private readonly Segment _gp, _heap, _heap2;
         private ulong _vtPlayer, _vtStaff, _vtHuman, _vtDecoy;
-        private ulong _nation;
+        private ulong _nation, _fin;
+        public void SetBalance(long v) => _heap.W64(_fin + 0x40, (ulong)v);
 
         public World()
         {
@@ -157,7 +171,7 @@ public static class Program
             ulong other = MakeClub("Third Club", "Third", new[] { 0 }, comp, gameDate, 3000).teams[0];
 
             // Finance value hidden one pointer away from the club, for the probe test
-            ulong fin = _heap.Alloc(0x80);
+            ulong fin = _fin = _heap.Alloc(0x80);
             _heap.W64(fin + 0x40, 12_345_678);
             _heap.W64(us + 0x1A0, fin);
 

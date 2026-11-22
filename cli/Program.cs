@@ -7,7 +7,7 @@ namespace TrueDoF;
 /// Use it if the BepInEx plugin won't load. Same output files as the plugin.
 ///
 ///   TrueDoF.Cli.exe
-///   TrueDoF.Cli.exe --probe "balance=12500000; points=24" [--depth 2]
+///   TrueDoF.Cli.exe --probe "balance=12500000; points=24" [--depth 2] [--inspect "competition +0xE08 +0x1E8"]
 /// </summary>
 public static class Program
 {
@@ -19,6 +19,7 @@ public static class Program
             if (args[i] == "--probe" && i + 1 < args.Length) { s.ProbeEnabled = true; s.ProbeValues = args[++i]; }
             else if (args[i] == "--depth" && i + 1 < args.Length && int.TryParse(args[++i], out int d)) s.ProbeDepth = Math.Clamp(d, 0, 4);
             else if (args[i] == "--out" && i + 1 < args.Length) s.OutDir = args[++i];
+            else if (args[i] == "--inspect" && i + 1 < args.Length) { s.ProbeEnabled = true; s.ProbeInspect = args[++i]; }
         }
 
         if (!OperatingSystem.IsWindows()) { Console.WriteLine("TrueDoF.Cli only works on Windows, next to a running FM27."); return 2; }

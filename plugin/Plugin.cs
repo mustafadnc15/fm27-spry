@@ -22,6 +22,8 @@ public class Plugin : BasePlugin
     private ConfigEntry<string> _probeValues;
     private ConfigEntry<int> _probeDepth;
     private ConfigEntry<int> _shortlistMax;
+    private ConfigEntry<string> _probeInspect;
+    private ConfigEntry<int> _probeInspectBytes;
 
     public override void Load()
     {
@@ -38,7 +40,11 @@ public class Plugin : BasePlugin
             _probeEnabled = Config.Bind("Probe", "ProbeEnabled", false,
                 "Discovery mode: also write probe.txt, searching for the numbers in ProbeValues.");
             _probeValues = Config.Bind("Probe", "ProbeValues", "",
-                "Numbers you can see in FM, e.g.: balance=12500000; transferBudget=5000000; wageBudget=350000; points=24; goalDiff=11");
+                "Numbers you can see in FM, e.g.: balance=12500000; transferBudget=5000000; wageBudget=350000; points=24; goalDiff=11  (exact match; put ~ before a number to allow +-2%)");
+            _probeInspect = Config.Bind("Probe", "ProbeInspect", "",
+                "Objects to dump with labels, separated by ';'. Every offset is followed as a pointer, e.g.: competition +0xE08 +0x1E8");
+            _probeInspectBytes = Config.Bind("Probe", "ProbeInspectBytes", 2048,
+                "How many bytes of each inspected object to show (64..16384).");
             _probeDepth = Config.Bind("Probe", "ProbeDepth", 2,
                 "How many pointer hops to follow from your club/team/competition (2 is a good start, 3 is slow).");
 
@@ -75,6 +81,8 @@ public class Plugin : BasePlugin
             ProbeEnabled = _probeEnabled.Value,
             ProbeValues = _probeValues.Value,
             ProbeDepth = Math.Clamp(_probeDepth.Value, 0, 4),
+            ProbeInspect = _probeInspect.Value,
+            ProbeInspectBytes = _probeInspectBytes.Value,
             ShortlistMaxMatches = Math.Clamp(_shortlistMax.Value, 1, 10),
         };
     }

@@ -123,20 +123,26 @@ you see in the game.
 ### The probe: helping TrueDoF find finances and the league table
 
 1. In FM, set the currency to pounds (Preferences → Units → Currency).
-2. Note your **balance**, **transfer budget** and **wage budget** from the Finances screen,
-   plus your **points** and **goal difference** from the league table.
+2. Note your **exact** balance, transfer budget and wage budget from the Finances screen,
+   plus your points and goal difference from the league table.
 3. Edit `<FM27>\BepInEx\config\com.truedof.plugin.cfg`:
 
    ```ini
    [Probe]
    ProbeEnabled = true
-   ProbeValues = balance=12500000; transferBudget=5000000; wageBudget=350000; points=24; goalDiff=11
+   ProbeValues = balance=2561896; transferBudget=40086; wageBudget=60989; points=59; goalDiff=43
+   ProbeInspect = competition +0xE08 +0x1E8
    ```
 
-4. Press F8. `probe.txt` lists every place those numbers were found.
-5. Play a match or a week, so the numbers change. Update `ProbeValues`, press F8 again,
-   and keep both `probe.txt` files. The places that match **both** times are the real
-   ones.
+   Numbers must be exact. Put `~` in front of one (for example `balance=~2.5M`, written
+   as `~2500000`) only if FM shows it rounded.
+4. Press F8. `probe.txt` shows where the numbers were found. The full list goes to
+   `probe-all.txt`.
+5. Play a match, so the numbers change. Update `ProbeValues` and press F8 again. Now
+   `probe.txt` lists **CONFIRMED** places, meaning ones that held the old value before and
+   the new value now. Those are the real fields.
+6. `ProbeInspect` dumps one memory object with labels (team / club / player / text). Each
+   `+0x…` is followed as a pointer.
 
 ---
 

@@ -141,8 +141,10 @@ public static class DumpRunner
             {
                 try
                 {
-                    WriteAtomic(Path.Combine(s.OutDir, "probe.txt"), Probe.Run(mem, ctx, regions, s));
-                    diag.Add("Probe written to probe.txt");
+                    var (summary, allHits) = Probe.Execute(mem, layout, ctx, scan, regions, s);
+                    WriteAtomic(Path.Combine(s.OutDir, "probe.txt"), summary);
+                    WriteAtomic(Path.Combine(s.OutDir, "probe-all.txt"), allHits);
+                    diag.Add("Probe written to probe.txt (full hit list in probe-all.txt)");
                 }
                 catch (Exception e) { diag.Add("Probe failed: " + e.Message); }
             }

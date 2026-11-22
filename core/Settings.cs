@@ -3,13 +3,15 @@ namespace TrueDoF;
 /// <summary>Options for one dump. The plugin fills these from the BepInEx config file.</summary>
 public sealed class Settings
 {
-    public const string ToolVersion = "0.1.0";
+    public const string ToolVersion = "0.1.1";
 
     public string Host = "plugin";
     public string OutDir = DefaultOutDir();
     public bool ProbeEnabled;
     public string ProbeValues = "";
     public int ProbeDepth = 2;
+    public string ProbeInspect = "";
+    public int ProbeInspectBytes = 0x800;
     public int ShortlistMaxMatches = 3;
 
     public static string DefaultOutDir() =>
