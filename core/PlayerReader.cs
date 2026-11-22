@@ -74,7 +74,7 @@ public sealed class PlayerReader
         if (morale is >= 1 and <= 20)
         {
             p.Morale = morale;
-            p.MoraleLevel = morale switch { <= 4 => "very poor", <= 7 => "poor", <= 10 => "okay", <= 14 => "good", <= 17 => "very good", _ => "superb" };
+            p.MoraleLevel = MoraleWord(morale);
         }
         p.ConditionRaw = _m.U16(block + (ulong)L.Condition);
 
@@ -146,6 +146,26 @@ public sealed class PlayerReader
             if (Plausible(s)) return s;
         }
         return null;
+    }
+
+    /// <summary>
+    /// FM27's words for the morale byte, as shown in the squad screen's Morale column (English).
+    /// 2-3 and 5-14 from fm-editor's check against FM, 15 from FMLibreEditor,
+    /// 16, 17 and 20 confirmed in the user's own save. 1, 4, 18 and 19 are not witnessed yet.
+    /// </summary>
+    public static readonly Dictionary<int, string> MoraleWords = new()
+    {
+        [2] = "Extremely Poor", [3] = "Very Poor", [5] = "Quite Poor", [6] = "Fairly Poor", [7] = "Slightly Poor",
+        [8] = "Fair", [9] = "Fairly Okay", [10] = "Okay", [11] = "Fairly Good", [12] = "Quite Good", [13] = "Good",
+        [14] = "Really Good", [15] = "Very Good", [16] = "Extremely Good", [17] = "Excellent", [20] = "Perfect",
+    };
+
+    public static string MoraleWord(int v)
+    {
+        if (MoraleWords.TryGetValue(v, out var w)) return w;
+        string below = MoraleWords.Where(kv => kv.Key < v).OrderByDescending(kv => kv.Key).Select(kv => kv.Value).FirstOrDefault();
+        string above = MoraleWords.Where(kv => kv.Key > v).OrderBy(kv => kv.Key).Select(kv => kv.Value).FirstOrDefault();
+        return below != null && above != null ? $"between {below} and {above}" : below ?? above;
     }
 
     private string Nation(ulong person)

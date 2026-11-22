@@ -73,7 +73,7 @@ public static class Program
                                   && ace.GetProperty("contract").GetProperty("transferListed").GetBoolean());
             Check("ace nationality", ace.GetProperty("nationality").GetString() == "Testland");
             Check("ace first team", ace.GetProperty("team").GetString() == "first team");
-            Check("ace morale 7 = poor", ace.GetProperty("morale").GetInt32() == 7 && ace.GetProperty("moraleLevel").GetString() == "poor");
+            Check("ace morale 7 = Slightly Poor", ace.GetProperty("morale").GetInt32() == 7 && ace.GetProperty("moraleLevel").GetString() == "Slightly Poor");
         }
         Check("bee found (indirect list entry)", squad.Any(p => p.GetProperty("name").GetString() == "Bee Keeper"));
         var loanee = squad.FirstOrDefault(p => p.GetProperty("name").GetString() == "Lou Nee");
@@ -124,6 +124,7 @@ public static class Program
         // ---- Small helpers ----
         Check("hotkey parse Ctrl+F8", Hotkey.Parse("Ctrl+F8") is { Ctrl: true, VirtualKey: 0x77 });
         Check("hotkey parse rubbish", Hotkey.Parse("Banana") == null);
+        Check("morale words", PlayerReader.MoraleWord(17) == "Excellent" && PlayerReader.MoraleWord(18) == "between Excellent and Perfect");
         Check("normalize accents", Shortlist.Normalize("Martin Ødegaard ") == "martin odegaard");
         Check("probe value parse", Probe.ParseValues("balance=12,500,000; points=~24").Count == 2 && Probe.ParseValues("x=~5")[0].approx);
 

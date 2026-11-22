@@ -88,7 +88,7 @@ public sealed class PlayerInfo
     public long? AskingPriceGbp;
     public int? ReputationCurrent, ReputationHome, ReputationWorld;
     public int? Morale;           // 1..20 (10 = Okay, 13 = Good, 20 = Perfect)
-    public string MoraleLevel;    // very poor / poor / okay / good / very good / superb
+    public string MoraleLevel;    // FM's own word, e.g. "Good", "Excellent", "Perfect"
     public int? ConditionRaw;     // UNVERIFIED offset: raw value
     public List<string> Notes = new();
 }
