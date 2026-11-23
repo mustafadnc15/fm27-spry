@@ -118,6 +118,7 @@ public sealed class Layout
         [14] = "ACB", [16] = "BBM", [17] = "AP", [19] = "P", [24] = "BCB", [27] = "IF", [29] = "NCB", [35] = "HB",
         [38] = "AWB", [43] = "PW", [44] = "IWB", [45] = "WFD", [46] = "BBP", [48] = "WCM", [52] = "IFB", [53] = "NGK",
         [54] = "OCB", [55] = "PWB", [56] = "CHM",
+        [41] = "SS",    // Second Striker: matched against the user's tactics screen (FM27 Game Pass 27.1)
     };
 
     /// <summary>Role bit → FM's abbreviation, without the ball.</summary>
@@ -125,6 +126,7 @@ public sealed class Layout
     {
         [1] = "SK", [2] = "LHK", [3] = "CB", [4] = "SCB", [5] = "CCB", [6] = "WCB", [9] = "FB", [10] = "PFB", [11] = "HFB",
         [12] = "WB", [14] = "HWB", [15] = "DM", [16] = "DDM", [17] = "PDM", [20] = "CM", [27] = "PCM", [28] = "SCM",
+        [30] = "AM",    // Attacking Midfielder: matched against the user's tactics screen (FM27 Game Pass 27.1)
         [32] = "OAM", [38] = "W", [39] = "TW", [40] = "IOW", [42] = "CFD", [43] = "TCF", [44] = "OCF",
     };
 
