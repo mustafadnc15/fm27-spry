@@ -105,6 +105,28 @@ public static class Program
               && tsJson.GetProperty("notes").EnumerateArray().Any(n => n.GetString().Contains("Trn")));
         Check("outgoing completed", transfers.Any(t => t.GetProperty("player").GetString() == "Ace Player" && t.GetProperty("status").GetString() == "completed" && t.GetProperty("to").GetString() == "Rival FC"));
 
+        // ---- Your tactic, read from the match engine's selection ----
+        var tactic = json.GetProperty("tactic");
+        Check("tactic found", tactic.ValueKind == JsonValueKind.Object);
+        if (tactic.ValueKind == JsonValueKind.Object)
+        {
+            var slots = tactic.GetProperty("slots").EnumerateArray().ToList();
+            Check("tactic style GEGE = Gegenpress", tactic.GetProperty("styleTag").GetString() == "GEGE" && tactic.GetProperty("style").GetString() == "Gegenpress");
+            Check("tactic has 11 slots", slots.Count == 11);
+            Check("slot 1: BGK / SK, Bee Keeper picked", slots[0].GetProperty("inPossessionRole").GetString() == "BGK"
+                  && slots[0].GetProperty("outOfPossessionRole").GetString() == "SK" && slots[0].GetProperty("player").GetString() == "Bee Keeper");
+            Check("slot 3: BCB / CB, Lou Nee", slots[2].GetProperty("inPossessionRole").GetString() == "BCB" && slots[2].GetProperty("player").GetString() == "Lou Nee");
+            Check("unnamed role bit kept", slots[10].GetProperty("inPossessionRole").ValueKind == JsonValueKind.Null
+                  && slots[10].GetProperty("inPossessionBit").GetInt32() == 49 && slots[10].GetProperty("outOfPossessionRole").GetString() == "CFD");
+            Check("empty slot has no player", slots[3].GetProperty("player").ValueKind == JsonValueKind.Null);
+            Check("rival's selection ignored", tactic.GetProperty("copies").GetInt32() == 1 && tactic.GetProperty("otherTactics").GetInt32() == 0);
+        }
+        string diagText = File.ReadAllText(Path.Combine(outDir, "diagnostics.txt"));
+        Check("diagnostics list class names", diagText.Contains("Most common C++ classes") && diagText.Contains(".?AVSOMETHING_ELSE@db@@") == false
+              && diagText.Contains("PREPARED_TACTICS_CREATOR_ARRAY"));
+        Check("role bit decoding", TacticReader.RoleBit((1UL << 22) | (1UL << 46)) == (46, true) && !TacticReader.RoleBit(1UL << 22).ok
+              && !TacticReader.RoleBit(0x7).ok);
+
         string probe = File.ReadAllText(Path.Combine(outDir, "probe.txt"));
         Check("probe finds balance path", probe.Contains("club +0x1A0 +0x40  [int32]"));
         Check("probe finds points", probe.Contains("competition +0x30  [int32]"));
@@ -221,19 +243,27 @@ public static class Program
             _heap.W64(usTeams[0] + (ulong)L.TeamManager, mgr);
 
             // Players
-            ulong ace = MakePlayer("Ace", "Player", new DateTime(2000, 5, 1), 155, 170, usTeams[0], 50_000, 0x01, "ST", "AMC", out _);
-            ulong bee = MakePlayer("Bee", "Keeper", new DateTime(1995, 1, 1), 140, 145, usTeams[0], 20_000, 0, "GK", null, out _);
-            ulong lou = MakePlayer("Lou", "Nee", new DateTime(2004, 1, 1), 120, 160, rivalTeams[0], 8_000, 0, "DC", null, out _);
+            ulong ace = MakePlayer("Ace", "Player", new DateTime(2000, 5, 1), 155, 170, usTeams[0], 50_000, 0x01, "ST", "AMC", out uint aceUid);
+            ulong bee = MakePlayer("Bee", "Keeper", new DateTime(1995, 1, 1), 140, 145, usTeams[0], 20_000, 0, "GK", null, out uint beeUid);
+            ulong lou = MakePlayer("Lou", "Nee", new DateTime(2004, 1, 1), 120, 160, rivalTeams[0], 8_000, 0, "DC", null, out uint louUid);
             ulong yg = MakePlayer("Young", "Gun", new DateTime(2010, 2, 1), 70, 165, usTeams[0], 1_000, 0, "MC", null, out YouthUid);
-            ulong far = MakePlayer("Far", "Away", new DateTime(2003, 1, 1), 100, 130, usTeams[0], 5_000, 0, "DL", null, out _);
+            ulong far = MakePlayer("Far", "Away", new DateTime(2003, 1, 1), 100, 130, usTeams[0], 5_000, 0, "DL", null, out uint farUid);
             ulong loanCon = _heap.Alloc(0x80);
             _heap.W64(loanCon + (ulong)L.ConTeam, rivalTeams[0]);
             _heap.W32(loanCon + (ulong)L.ConExpiry, FmDate.FromDate(new DateTime(2027, 6, 30)));
             ulong loanRec = _heap.Alloc(0x20);
             _heap.W64(loanRec, loanCon);
             _heap.W64(far + (ulong)L.LoanRecord, loanRec);
-            ulong ts = MakePlayer("Test", "Striker", new DateTime(1999, 1, 1), 160, 165, rivalTeams[0], 70_000, 0x01, "ST", null, out _);
-            ulong os = MakePlayer("Other", "Striker", new DateTime(1998, 1, 1), 110, 115, rivalTeams[0], 9_000, 0, "ST", null, out _);
+            ulong ts = MakePlayer("Test", "Striker", new DateTime(1999, 1, 1), 160, 165, rivalTeams[0], 70_000, 0x01, "ST", null, out uint tsUid);
+            ulong os = MakePlayer("Other", "Striker", new DateTime(1998, 1, 1), 110, 115, rivalTeams[0], 9_000, 0, "ST", null, out uint osUid);
+
+            // Tactics: our selection (GK Bee, then Far, Lou, Young Gun ... Ace up front) and a rival's one to ignore.
+            // Slot 1 BGK/SK, slot 2 FB/FB, slot 3 BCB/CB, ..., slot 11 an unnamed role bit (49) / CFD.
+            ulong vtSel = MakeNamedVtable(4, 0, L.SelectionClass);
+            var bits = new (int, int)[] { (12, 1), (2, 9), (24, 3), (1, 3), (2, 9), (4, 15), (9, 15), (9, 15), (7, 38), (7, 38), (49, 42) };
+            MakeSelection(vtSel, new uint[] { beeUid, farUid, louUid, 0, 0, YouthUid, 0, 0, 0, 0, aceUid }, "EGEG", bits);
+            MakeSelection(vtSel, new uint[] { tsUid, osUid }, "TNOC", bits);
+            MakeNamedVtable(5, 0x30, ".?AVSOMETHING_ELSE@db@@");
             MakePlayer("Random", "Bloke", new DateTime(1990, 1, 1), 90, 90, other, 2_000, 0, "MR", null, out _);
 
             // Team lists: Ace direct, Bee via a small wrapper record, loanee listed with us, youth in youth team
@@ -250,6 +280,41 @@ public static class Program
             for (int i = 0; i < 200; i++) _heap.W64(_heap.Alloc(16), _gp.Base + (ulong)(i * 8 + 0x8000));
             ulong decoy = _heap.Alloc(0x40); _heap.W64(decoy, _vtDecoy); _heap.W32(decoy + 0x0C, 5);
             ulong staff = _heap.Alloc(0x200) + 0x100; _heap.W64(staff, _vtStaff); _heap.W32(staff + 0x0C, 6);
+        }
+
+        public static uint PersonIdOf(uint uid) => 70_000 + uid;   // the game's person id, different from the unique id
+
+        /// <summary>A vtable with full MSVC type information, so the scanner can read its class name.</summary>
+        private ulong MakeNamedVtable(int i, int classOffset, string name)
+        {
+            ulong vt = MakeVtable(i, classOffset);
+            ulong col = _gp.Base + 0x1000 + (ulong)(i * 0x20);
+            ulong td = _gp.Base + 0x9000 + (ulong)(i * 0x100);
+            _gp.W32(col + (ulong)L.ColSignature, 1);
+            _gp.W32(col + (ulong)L.ColTypeDescriptor, (uint)(td - _gp.Base));
+            _gp.Write(td + (ulong)L.TypeDescriptorName, Encoding.ASCII.GetBytes(name + "\0"));
+            return vt;
+        }
+
+        /// <summary>A match-engine selection: person ids in the slots, and a tactic block with role masks.</summary>
+        public ulong MakeSelection(ulong vt, uint[] slotUids, string styleBackwards, (int ip, int oop)[] roleBits)
+        {
+            ulong sel = _heap.Alloc(0x100);
+            _heap.W64(sel, vt);
+            for (int i = 0; i < L.SelSlotCount; i++)
+                _heap.W32(sel + (ulong)(L.SelSlots + 4 * i), i < slotUids.Length && slotUids[i] != 0 ? PersonIdOf(slotUids[i]) : 0xFFFFFFFF);
+            ulong block = _heap.Alloc(0x800);
+            _heap.Write(block + (ulong)L.TacStyle, Encoding.ASCII.GetBytes(styleBackwards));
+            for (int i = 0; i < 11; i++)
+            {
+                _heap.W64(block + (ulong)(L.TacInPossession + i * L.TacSlotSize + L.TacRoleMask), (1UL << 22) | (1UL << roleBits[i].ip));
+                _heap.W64(block + (ulong)(L.TacOutOfPossession + i * L.TacSlotSize + L.TacRoleMask), (1UL << 21) | (1UL << roleBits[i].oop));
+            }
+            ulong list = _heap.Alloc(8);
+            _heap.W64(list, block);
+            _heap.W64(sel + (ulong)L.SelList, list);
+            _heap.W64(sel + (ulong)L.SelList + 8, list + 8);
+            return sel;
         }
 
         private ulong MakeVtable(int i, int classOffset)
@@ -307,6 +372,7 @@ public static class Program
             ulong p = block + (ulong)classOffset;
             uid = _nextUid++;
             _heap.W64(p, vt);
+            _heap.W32(p + (ulong)L.PersonId, PersonIdOf(uid));
             _heap.W32(p + (ulong)L.Uid, uid);
             _heap.W64(p + (ulong)L.FirstName, Nested(first));
             _heap.W64(p + (ulong)L.SecondName, Nested(second));

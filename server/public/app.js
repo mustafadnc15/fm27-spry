@@ -161,7 +161,14 @@ function tacticText(t, dir) {
     `Measured attribute values (role-to-attribute.txt): ${t.hasEngineWeights ? 'loaded' : 'not found'}`,
     `Tactic rating = ${t.rating || '?'}`,
     ...((t.problems || []).length ? ['', 'Problems in the file:', ...t.problems.map(p => '- ' + p)] : []),
+    ...memoryText(t.memory),
   ].join('\n');
+}
+function memoryText(m) {
+  if (!m) return ['', "FM's own tactic: not read from memory yet (press F8 in FM after leaving the tactics screen)."];
+  const c = m.check;
+  return ['', `FM's own tactic (read from memory at the last F8)${m.used ? ', used because there is no tactic.txt' : ''}:`, ...m.slots,
+    ...(c ? ['', c.differences.length ? `Differs from tactic.txt: ${c.total - c.same} of ${c.total} role pairs don't match (FM lists slots in its own order):` : `Matches tactic.txt: all ${c.total} role pairs.`, ...c.differences] : [])];
 }
 function viewLabel(s) {
   return s.visibility === 'everything' ? 'sees everything (CA/PA)' : s.visibility === 'scouted' ? `scouted estimates (judging ${s.judging}/20)` : 'sees what you see in FM';

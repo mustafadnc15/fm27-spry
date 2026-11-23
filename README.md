@@ -237,6 +237,17 @@ Where the role attributes come from: no full FM26/FM27 list is published.
 
 Settings → Your tactic shows which source each of your roles uses.
 
+**Read from FM automatically.** On every F8, TrueDoF also reads the tactic FM's match engine holds
+for your team: each slot's role with and without the ball, plus who you picked there. FM saves it
+when you leave the tactics screen, so change your tactic, leave that screen, then press F8.
+- Without a `tactic.txt`, that tactic is used.
+- With one, `tactic.txt` wins, and the briefing and Settings show FM's version next to it, with
+  any differences.
+- FM doesn't store positions (DL, AM(R)…), so TrueDoF works them out from each role and the
+  player in it.
+- A few role codes have no name yet. They show as "bit N" until we've matched them against the
+  game.
+
 The tactic shows up in the briefing ("What he sees") and in **Settings → Your tactic**, which
 also lists any line TrueDoF didn't understand. Edits apply at your next question, with no
 restart needed.

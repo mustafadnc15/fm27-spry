@@ -14,7 +14,33 @@ public sealed class Dump
     public List<ShortlistMiss> ShortlistNotFound = new();
     public string ShortlistStatus;    // what TrueDoF found in shortlist.txt (helps when it's empty)
     public List<TransferInfo> Transfers = new();
+    public TacticInfo Tactic;         // your tactic as FM's match engine holds it; null = not found
     public List<string> Notes = new();
+}
+
+/// <summary>Your tactic, read from FM's memory (see TacticReader). Roles use FM's abbreviations.</summary>
+public sealed class TacticInfo
+{
+    public string Source = "memory";
+    public string StyleTag;           // e.g. "GEGE" (null = not readable)
+    public string Style;              // e.g. "Gegenpress" when the tag is known
+    public List<TacticSlotInfo> Slots = new();   // the eleven, in FM's formation order
+    public List<string> Substitutes = new();
+    public int Copies;                // how many selections agree on this tactic
+    public int OtherTactics;          // different tactics FM also holds for your team
+    public string Note;
+}
+
+public sealed class TacticSlotInfo
+{
+    public int Slot;
+    public string InPossessionRole;   // FM abbreviation, e.g. "BCB"; null = role code not known yet
+    public int InPossessionBit;       // raw role bit (shown when the role isn't known yet)
+    public string OutOfPossessionRole;
+    public int OutOfPossessionBit;
+    public string InPossessionMask, OutOfPossessionMask;   // raw masks, for diagnostics
+    public uint? PlayerUid;           // who you picked for this slot
+    public string Player;
 }
 
 public sealed class DumpMeta

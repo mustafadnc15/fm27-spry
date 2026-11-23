@@ -27,6 +27,9 @@ public sealed class ScanResult
     public readonly List<ulong> ManagerPersons = new();
     public readonly List<DealRaw> Deals = new();
     public readonly Dictionary<int, long> ClassHistogram = new();  // class offset → count (diagnostics)
+    public readonly List<ulong> Selections = new();                 // match-engine team selections (your tactic lives there)
+    public readonly Dictionary<ulong, long> VtableCounts = new();   // vtable → objects seen (diagnostics)
+    public readonly Dictionary<ulong, string> VtableNames = new();  // vtable → C++ class name, where readable
     public long BytesTotal, BytesUnreadable, Candidates;
     public int RegionErrors;
     public string FirstRegionError;
@@ -70,7 +73,7 @@ public static class HeapScanner
 
         ulong modLo = Math.Min(gp.Base, ga?.Base ?? gp.Base);
         ulong modHi = Math.Max(gp.End, ga?.End ?? gp.End);
-        var classCache = new ConcurrentDictionary<ulong, int>();
+        var classCache = new ConcurrentDictionary<ulong, VtInfo>();
         var result = new ScanResult();
         foreach (var r in regions) result.BytesTotal += (long)r.Size;
         long done = 0;
@@ -130,6 +133,8 @@ public static class HeapScanner
             foreach (var kv in l.AddrToUid) result.AddrToUid[kv.Key] = kv.Value;
             foreach (var kv in l.ClassHistogram) result.ClassHistogram[kv.Key] = result.ClassHistogram.GetValueOrDefault(kv.Key) + kv.Value;
             foreach (var m in l.ManagerPersons) if (!result.ManagerPersons.Contains(m)) result.ManagerPersons.Add(m);
+            foreach (var sel in l.Selections) if (!result.Selections.Contains(sel)) result.Selections.Add(sel);
+            foreach (var kv in l.VtableCounts) result.VtableCounts[kv.Key] = result.VtableCounts.GetValueOrDefault(kv.Key) + kv.Value;
             foreach (var d in l.Deals)
                 if (dealSeen.Add((d.Person, d.ToTeam, d.FromTeam, d.Date, d.Status))) result.Deals.Add(d);
             result.BytesUnreadable += l.BytesUnreadable;
@@ -137,11 +142,47 @@ public static class HeapScanner
             result.RegionErrors += l.RegionErrors;
             result.FirstRegionError ??= l.FirstRegionError;
         }
+        foreach (var kv in classCache) if (kv.Value.Name != null) result.VtableNames[kv.Key] = kv.Value.Name;
         return result;
     }
 
+    /// <summary>What we know about one vtable (looked up once, then cached).</summary>
+    private readonly struct VtInfo
+    {
+        public readonly int Cls;          // class offset fingerprint ([vtable-8]+4)
+        public readonly string Name;      // C++ class name from RTTI, or null
+        public readonly bool Selection;   // simatch::PREPARED_TACTICS_CREATOR_ARRAY
+        public VtInfo(int cls, string name, bool selection) { Cls = cls; Name = name; Selection = selection; }
+    }
+
+    private static VtInfo Describe(Mem mem, Layout L, ModuleInfo gp, ModuleInfo ga, ulong vt)
+    {
+        ulong col = mem.Ptr(vt - 8);
+        if (col == 0) return new VtInfo(0, null, false);
+        int cls = mem.I32(col + 4);
+        var module = gp.Contains(vt) ? gp : ga;
+        string name = RttiName(mem, L, col, module);
+        return new VtInfo(cls, name, name == L.SelectionClass);
+    }
+
+    /// <summary>
+    /// The C++ class name of a vtable, from Microsoft's run-time type information: the "complete object
+    /// locator" (at [vtable-8]) stores, at +0x0C, where the type descriptor is relative to the module's start;
+    /// the descriptor holds the name at +0x10, e.g. ".?AVPREPARED_TACTICS_CREATOR_ARRAY@simatch@@".
+    /// Every step is checked; anything odd returns null.
+    /// </summary>
+    public static string RttiName(Mem mem, Layout L, ulong col, ModuleInfo module)
+    {
+        if (col == 0 || module == null) return null;
+        if (mem.I32(col + (ulong)L.ColSignature) != 1) return null;   // x64 locators carry signature 1
+        int rva = mem.I32(col + (ulong)L.ColTypeDescriptor);
+        if (rva <= 0 || (ulong)rva >= module.Size) return null;
+        string name = mem.CString(module.Base + (ulong)rva + (ulong)L.TypeDescriptorName, 200);
+        return name != null && name.StartsWith(".?A", StringComparison.Ordinal) ? name : null;
+    }
+
     private static void ScanChunk(Mem mem, Layout L, ModuleInfo gp, ModuleInfo ga, ulong modLo, ulong modHi,
-                                  ConcurrentDictionary<ulong, int> classCache, byte[] buf, int len, ulong chunkBase, ScanResult local)
+                                  ConcurrentDictionary<ulong, VtInfo> classCache, byte[] buf, int len, ulong chunkBase, ScanResult local)
     {
         var span = buf.AsSpan(0, len);
         for (int i = 0; i + 0x10 <= len; i += 8)
@@ -167,10 +208,14 @@ public static class HeapScanner
             if (!gp.Contains(vt) && (ga == null || !ga.Contains(vt))) continue;
             local.Candidates++;
 
-            int cls = classCache.GetOrAdd(vt, v => { ulong meta = mem.Ptr(v - 8); return meta == 0 ? 0 : mem.I32(meta + 4); });
+            var info = classCache.GetOrAdd(vt, v => Describe(mem, L, gp, ga, v));
+            if (info.Name != null) local.VtableCounts[vt] = local.VtableCounts.GetValueOrDefault(vt) + 1;   // real classes only
+            ulong p = chunkBase + (ulong)i;
+            if (info.Selection) { local.Selections.Add(p); continue; }   // checked later by TacticReader
+
+            int cls = info.Cls;
             if (cls <= 0 || cls >= 0x2000) continue;
 
-            ulong p = chunkBase + (ulong)i;
             uint uid = i + L.Uid + 4 <= len
                 ? BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(i + L.Uid))
                 : mem.U32(p + (ulong)L.Uid);

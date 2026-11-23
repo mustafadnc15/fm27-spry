@@ -19,7 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ATTRIBUTES, normaliseAttribute, normalisePosition, slotLabel, roleLabel, readTactic } = require('./tactic');
+const { ATTRIBUTES, normaliseAttribute, normalisePosition, slotLabel, roleLabel, readTactic, readWantedAttributes } = require('./tactic');
 const { findRole, readRoleOverrides } = require('./roles');
 const { ratingAt } = require('./ratings');
 
@@ -336,19 +336,95 @@ function readEngineWeights(dataDir, problems) {
   }
 }
 
+// ---------------------------------------------------------------- the tactic read from FM's memory
+
+const OUTFIELD = ['DL', 'DC', 'DR', 'WBL', 'WBR', 'DM', 'ML', 'MC', 'MR', 'AML', 'AMC', 'AMR', 'ST'];
+
 /**
- * Everything from the data folder in one go: tactic.txt, wanted-player-attributes.txt, roles.txt and
- * role-to-attribute.txt. Works with any of them missing. Never throws.
+ * Where a slot plays, which FM's tactic block doesn't store: among the role's positions, the one the
+ * picked player knows best; if he knows none of them (or the role is unknown), his own best position.
  */
-function loadModel(dataDir) {
+function pickPosition(role, player) {
+  const pr = (player && player.positionRatings) || {};
+  const best = list => list.reduce((a, b) => ((pr[b] || 0) > (pr[a] || 0) ? b : a), list[0]);
+  if (role && role.line === 'GK') return 'GK';
+  if (role && role.positions.length && (!player || role.positions.some(p => (pr[p] || 0) >= 15))) return best(role.positions);
+  if (player) return best(OUTFIELD.concat('GK'));
+  return role && role.positions.length ? role.positions[0] : 'MC';
+}
+
+/**
+ * The dump's "tactic" (C# TacticReader: FM abbreviations per slot, the player picked) as the same structure
+ * parseTactic() returns, so everything else works the same.
+ */
+function tacticFromMemory(mem, squad, overrides) {
+  const t = { name: 'Your FM tactic (read from memory)', formation: { inPossession: null, outOfPossession: null },
+    style: mem.style || (mem.styleTag ? `tag ${mem.styleTag}` : null), priority: [], slots: [], problems: [], source: 'memory', picks: [] };
+  for (const s of mem.slots || []) {
+    const player = (squad || []).find(p => p.uid === s.playerUid) || null;
+    const side = (abbr, bit, phase) => {
+      const role = abbr ? findRole(abbr, phase, overrides) : null;
+      const name = role ? role.name : abbr || `unknown role (bit ${bit})`;
+      if (!role) t.problems.push(`slot ${s.slot}: ${abbr ? `role ${abbr}` : `role bit ${bit}`} ${phase === 'ip' ? 'with' : 'without'} the ball is not named yet`);
+      return { position: pickPosition(role, player), role: name, duty: null, abbr: abbr || `bit ${bit}` };
+    };
+    t.slots.push({ inPossession: side(s.inPossessionRole, s.inPossessionBit, 'ip'), outOfPossession: side(s.outOfPossessionRole, s.outOfPossessionBit, 'oop') });
+    t.picks.push(s.player || null);
+  }
+  return t;
+}
+
+/**
+ * Compare tactic.txt with FM's tactic as sets of role pairs ("with the ball / without"), because FM lists
+ * the slots in its own order (not the order of tactic.txt).
+ */
+function compareWithMemory(fileTactic, mem, overrides) {
+  const abbrOf = (name, phase) => { const r = findRole(name, phase, overrides); return r ? r.abbr : name; };
+  const fileRoles = fileTactic.slots.map(s => `${abbrOf(s.inPossession.role, 'ip')}/${abbrOf(s.outOfPossession.role, 'oop')}`);
+  const memRoles = mem.slots.map(s => `${s.inPossession.abbr}/${s.outOfPossession.abbr}`);
+  const left = [...memRoles], onlyFile = [];
+  for (const f of fileRoles) { const i = left.indexOf(f); if (i >= 0) left.splice(i, 1); else onlyFile.push(f); }
+  const differences = onlyFile.length || left.length
+    ? [`only in tactic.txt: ${onlyFile.join(', ') || 'none'}`, `only in FM: ${left.join(', ') || 'none'}`] : [];
+  return { same: fileRoles.length - onlyFile.length, total: Math.max(fileRoles.length, memRoles.length), differences };
+}
+
+/**
+ * Everything in one go: tactic.txt, wanted-player-attributes.txt, roles.txt, role-to-attribute.txt and,
+ * when the dump has one, the tactic read from FM's memory. tactic.txt wins over the memory tactic.
+ * Works with any of them missing. Never throws.
+ */
+function loadModel(dataDir, dump) {
   const problems = [];
-  let tactic = null;
-  try { tactic = readTactic(dataDir); } catch (e) { problems.push(`tactic.txt: ${e.message}`); }
+  let fileTactic = null, memTactic = null;
+  try { fileTactic = readTactic(dataDir); } catch (e) { problems.push(`tactic.txt: ${e.message}`); }
   const ro = readRoleOverrides(dataDir);
+  try {
+    if (dump && dump.tactic && (dump.tactic.slots || []).length) memTactic = tacticFromMemory(dump.tactic, dump.squad, ro.overrides);
+  } catch (e) { problems.push(`tactic from memory: ${e.message}`); }
+  let tactic = fileTactic;
+  if (!tactic && memTactic) {
+    tactic = memTactic;
+    try { tactic.wantedAttributes = readWantedAttributes(dataDir, tactic); } catch { /* optional */ }
+  }
   const engine = readEngineWeights(dataDir, problems);
   const model = buildModel(tactic, ro.overrides, engine);
   model.problems.push(...ro.problems, ...problems);
+  model.memory = memTactic;
+  model.memoryCheck = fileTactic && memTactic ? compareWithMemory(fileTactic, memTactic, ro.overrides) : null;
   return model;
+}
+
+/** Briefing lines about FM's own tactic: who is picked where, and how it differs from tactic.txt. */
+function memoryLines(model) {
+  const m = model.memory;
+  if (!m) return [];
+  const out = [`FM's current selection (read from memory${m.style ? `, style ${m.style}` : ''}): ` +
+    m.slots.map((s, i) => `${i + 1}. ${s.inPossession.abbr}/${s.outOfPossession.abbr} ${m.picks[i] || '-'}`).join('; ')];
+  const c = model.memoryCheck;
+  if (c && c.differences.length)
+    out.push(`FM's tactic differs from tactic.txt: ${c.total - c.same} of ${c.total} role pairs don't match (tactic.txt is used for ratings): ${c.differences.join('; ')}`);
+  return out;
 }
 
 /** What drives the rating, for the briefing. */
@@ -362,5 +438,6 @@ function describeModel(model) {
 
 module.exports = {
   parseGuide, curve, parseEngineWeights, slotEngineWeights, buildModel, loadModel, rateSlot, bestXI, resolveSlot,
+  tacticFromMemory, compareWithMemory, memoryLines,
   slotAttributes, describeRules, describeModel, familiarity,
 };

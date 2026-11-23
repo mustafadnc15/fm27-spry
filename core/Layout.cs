@@ -92,6 +92,49 @@ public sealed class Layout
     public int DealDate = 0x44, DealStatus = 0x55;
     public int DealRecordBytes => DealStatus + 1;
 
+    // ---- MSVC run-time type information (x64): [vtable-8] → "complete object locator" ----
+    public int ColSignature = 0x00;        // i32, 1 on x64
+    public int ColTypeDescriptor = 0x0C;   // i32 offset of the type descriptor from the module's start
+    public int TypeDescriptorName = 0x10;  // in the type descriptor: the class name, e.g. ".?AVTEAM@db@@"
+
+    // ---- Your tactic (FMLibreEditor docs/recon/fm27-tactics-and-value.md and fm27-transfers.md; facts only) ----
+    // The match engine keeps each picked team as an object of this class: 26 person ids (the eleven in the
+    // formation's order, then the substitutes) and a list whose first entry points at the tactic block.
+    public string SelectionClass = ".?AVPREPARED_TACTICS_CREATOR_ARRAY@simatch@@";
+    public int PersonId = 0x08;            // u32 on the person block: the game's person id (= player block +0x290)
+    public int SelList = 0x08;             // (begin, end, capacity) of pointers to tactic blocks
+    public int SelSlots = 0x28;            // 26 x u32 person ids; 0xFFFFFFFF = empty
+    public int SelSlotCount = 26;
+    public int TacStyle = 0x100;           // u32 style tag, text backwards ("CONT", "GEGE", ...)
+    public int TacInPossession = 0x148;    // 11 slot entries ...
+    public int TacOutOfPossession = 0x468; // ... and 11 more
+    public int TacSlotSize = 0x48;
+    public int TacRoleMask = 0x10;         // in a slot entry: u64 role mask (one of bits 21-23 + one bit naming the role)
+
+    /// <summary>Role bit → FM's abbreviation, with the ball (FMLibreEditor's reading on FM27 Steam + Game Pass).</summary>
+    public static readonly Dictionary<int, string> InPossessionRoles = new()
+    {
+        [1] = "CB", [2] = "FB", [3] = "WB", [4] = "DM", [7] = "W", [9] = "AM", [10] = "DLF", [11] = "CFD", [12] = "BGK",
+        [14] = "ACB", [16] = "BBM", [17] = "AP", [19] = "P", [24] = "BCB", [27] = "IF", [29] = "NCB", [35] = "HB",
+        [38] = "AWB", [43] = "PW", [44] = "IWB", [45] = "WFD", [46] = "BBP", [48] = "WCM", [52] = "IFB", [53] = "NGK",
+        [54] = "OCB", [55] = "PWB", [56] = "CHM",
+    };
+
+    /// <summary>Role bit → FM's abbreviation, without the ball.</summary>
+    public static readonly Dictionary<int, string> OutOfPossessionRoles = new()
+    {
+        [1] = "SK", [2] = "LHK", [3] = "CB", [4] = "SCB", [5] = "CCB", [6] = "WCB", [9] = "FB", [10] = "PFB", [11] = "HFB",
+        [12] = "WB", [14] = "HWB", [15] = "DM", [16] = "DDM", [17] = "PDM", [20] = "CM", [27] = "PCM", [28] = "SCM",
+        [32] = "OAM", [38] = "W", [39] = "TW", [40] = "IOW", [42] = "CFD", [43] = "TCF", [44] = "OCF",
+    };
+
+    /// <summary>Style tags seen by FMLibreEditor, with the game's names.</summary>
+    public static readonly Dictionary<string, string> TacticStyles = new()
+    {
+        ["CONT"] = "Control Possession", ["TIKI"] = "Tiki-Taka", ["DIRE"] = "Direct", ["GEGE"] = "Gegenpress",
+        ["NULL"] = "custom (no style template)",   // seen on the user's own tactic (FM27 Game Pass 27.1)
+    };
+
     public static readonly Layout FM27 = new();
     public static readonly Layout FM26 = new() { Name = "FM26", Major = 26, VerifiedMinors = new[] { 3 }, HumanManagerClass = 0x450 };
 

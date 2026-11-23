@@ -89,7 +89,7 @@ function readDump() { return readJson(path.join(DATA_DIR, 'dump-latest.json')); 
 function currentBriefing(settings) {
   const dump = readDump();
   // Tactic files are read fresh each time, so edits apply at the next question.
-  const model = loadModel(DATA_DIR);
+  const model = loadModel(DATA_DIR, dump);
   if (!dump) return { dump: null, text: null, model };
   const seen = settings.visibility === 'scouted' ? perceive(dump, settings.judging)
     : settings.visibility === 'attributes' ? fmView(dump) : dump;
@@ -100,7 +100,13 @@ function currentBriefing(settings) {
 function tacticSummary(model) {
   const t = model && model.tactic;
   if (!t) return null;
+  const m = model.memory;
   return {
+    memory: m ? {
+      used: t === m, style: m.style,
+      slots: m.slots.map((s, i) => `${i + 1}. ${s.inPossession.abbr} / ${s.outOfPossession.abbr}  (${s.inPossession.role} / ${s.outOfPossession.role})  ${m.picks[i] || '-'}`),
+      check: model.memoryCheck,
+    } : null,
     name: t.name, formation: t.formation, style: t.style, priority: t.priority, source: t.source,
     slots: model.slots.map(s => {
       const abbr = r => (r ? ` [${r.abbr || 'yours'}, ${SOURCES_SHORT[r.basis] || r.basis}]` : ' [not in role table]');

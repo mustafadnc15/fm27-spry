@@ -181,7 +181,7 @@ function tacticLines(t) {
   const out = [];
   const f = t.formation;
   out.push(`Tactic "${t.name || 'unnamed'}" | shape in possession ${f.inPossession || '?'}, out of possession ${f.outOfPossession || '?'}` +
-    ` | style ${t.style || 'not set'} | source ${t.source || '?'}`);
+    ` | style ${t.style || 'not set'} | source ${t.source === 'memory' ? 'read from FM (positions worked out from roles and players)' : t.source || '?'}`);
   if (t.priority.length) out.push(`Priority attributes (the manager's top requirement for every role): ${t.priority.join(', ')}`);
   out.push('Slots (position with ball→without ball: role with ball / role without ball):');
   t.slots.forEach((s, i) => out.push(`${String(i + 1).padStart(2)}. ${slotLabel(s)}: ${roleLabel(s.inPossession)} / ${roleLabel(s.outOfPossession)}`));
@@ -193,4 +193,4 @@ function tacticLines(t) {
   return out;
 }
 
-module.exports = { parseTactic, readTactic, tacticLines, slotLabel, roleLabel, normalisePosition, normaliseAttribute, ATTRIBUTES, POSITIONS };
+module.exports = { parseTactic, readTactic, readWantedAttributes, tacticLines, slotLabel, roleLabel, normalisePosition, normaliseAttribute, ATTRIBUTES, POSITIONS };

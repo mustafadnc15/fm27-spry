@@ -155,3 +155,61 @@ test('briefing with a tactic: tactic XI, requirements in weak spots, shortlist v
   // without a tactic, the old generic XI is still there
   assert.match(buildBriefing(fixture()), /## BEST XI BY CA/);
 });
+
+// FM's tactic as the C# TacticReader writes it into dump-latest.json.
+function memoryDump() {
+  const d = fixture();
+  const xi = d.squad.filter(p => p.teamType === 0 && !p.onLoanAt);
+  const gk = xi.find(p => (p.naturalPositions || []).includes('GK'));
+  const others = xi.filter(p => p !== gk);
+  const roles = [['BGK', 12, 'SK', 1], ['FB', 2, 'FB', 9], ['BCB', 24, 'CB', 3], ['BCB', 24, 'CB', 3], ['FB', 2, 'FB', 9],
+    ['DM', 4, 'CB', 3], ['AM', 9, 'DM', 15], ['AM', 9, 'DM', 15], [null, 49, 'W', 38], [null, 49, 'OAM', 32], [null, 49, 'W', 38]];
+  d.tactic = {
+    source: 'memory', styleTag: 'GEGE', style: 'Gegenpress', copies: 3, otherTactics: 0, substitutes: [],
+    slots: roles.map(([ip, ipBit, oop, oopBit], i) => {
+      const p = i === 0 ? gk : others[i - 1];
+      return { slot: i + 1, inPossessionRole: ip, inPossessionBit: ipBit, outOfPossessionRole: oop, outOfPossessionBit: oopBit,
+        playerUid: p ? p.uid : null, player: p ? p.name : null };
+    }),
+  };
+  return { d, gk };
+}
+
+test('memory tactic: roles named, unknown bits kept, positions from the picked players', () => {
+  const { d, gk } = memoryDump();
+  const t = T.tacticFromMemory(d.tactic, d.squad, {});
+  assert.strictEqual(t.source, 'memory');
+  assert.strictEqual(t.style, 'Gegenpress');
+  assert.strictEqual(t.slots.length, 11);
+  assert.strictEqual(t.slots[0].inPossession.role, 'Ball-Playing Goalkeeper');
+  assert.strictEqual(t.slots[0].inPossession.position, 'GK');
+  assert.strictEqual(t.slots[8].inPossession.role, 'unknown role (bit 49)');
+  assert.ok(t.problems.some(p => /bit 49/.test(p)));
+  assert.strictEqual(t.picks[0], gk.name);
+});
+
+test('loadModel: memory tactic is used without tactic.txt; tactic.txt wins and differences are listed', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'truedof-mem-'));
+  try {
+    const { d } = memoryDump();
+    const m1 = T.loadModel(dir, d);
+    assert.strictEqual(m1.tactic.source, 'memory');
+    assert.strictEqual(m1.slots.length, 11);
+    const text = buildBriefing(d, { model: m1 });
+    assert.match(text, /## BEST XI FOR YOUR TACTIC: Your FM tactic \(read from memory\)/);
+    assert.match(text, /FM's current selection \(read from memory, style Gegenpress\): 1\. BGK\/SK /);
+    fs.writeFileSync(path.join(dir, 'tactic.txt'), TACTIC);
+    const m2 = T.loadModel(dir, d);
+    assert.strictEqual(m2.tactic.source, 'tactic.txt');
+    // Compared as role pairs, whatever the order: FB/FB x2, BCB/CB x2, DM/CB, AM/DM x2 match (7 of 11).
+    assert.strictEqual(m2.memoryCheck.same, 7);
+    assert.match(m2.memoryCheck.differences[0], /^only in tactic\.txt: SK\/SK, SS\/W, SS\/AM, SS\/W$/);
+    assert.match(m2.memoryCheck.differences[1], /^only in FM: BGK\/SK, bit 49\/W, bit 49\/OAM, bit 49\/W$/);
+    assert.match(buildBriefing(d, { model: m2 }), /FM's tactic differs from tactic\.txt: 4 of 11 role pairs don't match/);
+    // the same roles listed in another order count as a match
+    const shuffled = { ...d, tactic: { ...d.tactic, slots: [...d.tactic.slots].reverse() } };
+    assert.strictEqual(T.loadModel(dir, shuffled).memoryCheck.same, 7);
+    assert.strictEqual(T.loadModel(dir, null).memory, null, 'no dump: no memory tactic, no crash');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

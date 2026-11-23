@@ -1,7 +1,7 @@
 'use strict';
 const { KEY_ATTRS, styleGroup, dumpGetter, bestPosition } = require('./ratings');
 const { tacticLines } = require('./tactic');
-const { buildModel, rateSlot, bestXI: tacticXI, describeModel } = require('./tacticRating');
+const { buildModel, rateSlot, bestXI: tacticXI, describeModel, memoryLines } = require('./tacticRating');
 // TrueDoF briefing builder.
 // Turns dump-latest.json into a compact text briefing (< ~3,000 tokens) for the AI Director.
 // All football maths happens HERE, in plain code, so the AI receives facts it can't miscount.
@@ -178,7 +178,8 @@ function buildBriefing(dump, opts = {}) {
   // so describing the tactic never squeezes the squad list.
   const tacticObj = opts.model ? opts.model.tactic : opts.tactic;
   const tacticBlock = tacticObj ? tacticLines(tacticObj) : [];
-  const maxTokens = (opts.maxTokens || 3000) + estimateTokens(tacticBlock.join('\n'));
+  const memBlock = opts.model ? memoryLines(opts.model) : [];
+  const maxTokens = (opts.maxTokens || 3000) + estimateTokens([...tacticBlock, ...memBlock].join('\n'));
   const meta = dump.meta || {}, club = dump.club || {};
   const realism = meta.realism || null;   // set by realism.perceive(): numbers are estimates
   const attrsOnly = meta.visibility === 'attributes';   // set by realism.fmView(): no CA/PA, position ratings instead
@@ -235,6 +236,7 @@ function buildBriefing(dump, opts = {}) {
   line('## YOUR TACTIC');
   if (tacticBlock.length) tacticBlock.forEach(line);
   else line('No tactic set (the manager can describe it in tactic.txt in the TrueDoF folder).');
+  memBlock.forEach(line);
 
   // ---- finances
   line('');

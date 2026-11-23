@@ -135,6 +135,11 @@ public static class DumpRunner
 
             var ctx = new ClubDumper(mem, layout, scan, s, diag).Build(dump);
 
+            // Your tactic, from the match engine's selections. Optional: a failure never spoils the dump.
+            try { dump.Tactic = TacticReader.Read(mem, layout, scan, dump, diag); }
+            catch (Exception e) { diag.Add("Tactic reading failed: " + e.Message); }
+            if (dump.Tactic == null) dump.Notes.Add("Your tactic could not be read from memory (tactic.txt still works).");
+
             WriteAtomic(Path.Combine(s.OutDir, "dump-latest.json"), JsonSerializer.Serialize(dump, Json));
 
             if (s.ExportDatabase)
@@ -257,6 +262,14 @@ public static class DumpRunner
                 sb.AppendLine("After an FM patch: staff = biggest peak, players = 2nd, player+staff ≈ 5-10% of players, human manager = 1-2 hits.");
                 foreach (var kv in scan.ClassHistogram.OrderByDescending(kv => kv.Value).Take(30))
                     sb.AppendLine($"  0x{kv.Key:X4}  {kv.Value,10:N0}");
+
+                // C++ class names (from the game's run-time type information): after a patch, a class we rely on
+                // should still show up here under the same name, even when its offsets moved.
+                sb.AppendLine();
+                sb.AppendLine($"Most common C++ classes on the heap ({scan.VtableNames.Count:N0} named vtables). " +
+                              $"Your tactic is read from {layout.SelectionClass} ({scan.Selections.Count} found).");
+                foreach (var kv in scan.VtableCounts.OrderByDescending(kv => kv.Value).Take(40))
+                    sb.AppendLine($"  {kv.Value,10:N0}  {scan.VtableNames.GetValueOrDefault(kv.Key) ?? "?"}");
             }
             if (dump.Squad.Count > 0)
             {
