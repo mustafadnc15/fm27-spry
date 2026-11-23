@@ -139,6 +139,23 @@ test('Director app end to end', async t => {
     assert.ok(call.headers['x-api-key'] === 'test-key' || call.headers.authorization === 'Bearer test-key');
   });
 
+  await t.test('tactic.txt reaches the settings dialog, the briefing and the system prompt', async () => {
+    const tacticFile = path.join(dataDir, 'tactic.txt');
+    assert.strictEqual(JSON.parse((await request(port, 'GET', '/api/state')).text).tactic, null);
+    assert.doesNotMatch(seen[seen.length - 1].body.system[0].text, /The manager's tactic/);
+    fs.writeFileSync(tacticFile, 'name: Test Press\nformation: 4-3-3\npriority: pace\nGK = Goalkeeper\nDM-DC = Defensive Midfielder / Centre-Back\n');
+    try {
+      const s = JSON.parse((await request(port, 'GET', '/api/state')).text);
+      assert.strictEqual(s.tactic.name, 'Test Press');
+      assert.deepStrictEqual(s.tactic.priority, ['pace']);
+      assert.strictEqual(s.tactic.slots[1], 'DM→DC: Defensive Midfielder / Centre-Back');
+      assert.ok(s.tactic.problems.some(p => /11/.test(p)));
+      assert.match((await request(port, 'GET', '/api/briefing')).text, /## YOUR TACTIC\nTactic "Test Press"/);
+      await request(port, 'POST', '/api/chat', { messages: [{ role: 'user', content: 'Who fits?' }] });
+      assert.match(seen[seen.length - 1].body.system[0].text, /# The manager's tactic/);
+    } finally { fs.unlinkSync(tacticFile); }
+  });
+
   await t.test('the Director can search the player database mid-answer', async () => {
     const { db } = require('./dbfixture').dbFixture();
     fs.writeFileSync(path.join(dataDir, 'players-db.json'), JSON.stringify(db));

@@ -188,6 +188,32 @@ FM's own shortlists can't be read yet. Saved shortlist files are encrypted, and 
 found where FM keeps the shortlist in memory. So `shortlist.txt` (or "add him to the
 shortlist" in the chat) is the way to go.
 
+### Tell him your tactic
+
+Put two plain text files in `%LOCALAPPDATA%\TrueDoF\`:
+
+- `tactic.txt`: the name, the shapes with and without the ball, your style, your priority
+  attributes and the 11 slots. A slot line is
+  `<position with ball>-<position without ball> = <role with ball> / <role without ball>`:
+
+  ```
+  name: ZaZ - Ace of Diamonds 2.0
+  formation: 4-1-2-3-0 / 5-2-0-3-0
+  style: Gegenpress
+  priority: pace, acceleration, stamina
+
+  GK-GK  = Ball-Playing Goalkeeper / Sweeper Keeper
+  DM-DC  = Defensive Midfielder / Centre-Back
+  AM(C)-AM(R)  = Second Striker / Winger
+  ```
+
+- `wanted-player-attributes.txt` (optional): your own notes on which attributes the tactic
+  needs. The Director reads them word for word.
+
+The tactic shows up in the briefing ("What he sees") and in **Settings → Your tactic**, which
+also lists any line TrueDoF didn't understand. Edits apply at your next question, with no
+restart needed.
+
 ### Buttons and settings
 
 - **Refresh from FM**: asks the plugin for fresh data, the same as pressing F8 in the game.

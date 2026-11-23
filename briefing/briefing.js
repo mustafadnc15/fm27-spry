@@ -1,5 +1,6 @@
 'use strict';
 const { KEY_ATTRS, styleGroup, dumpGetter, bestPosition } = require('./ratings');
+const { tacticLines } = require('./tactic');
 // TrueDoF briefing builder.
 // Turns dump-latest.json into a compact text briefing (< ~3,000 tokens) for the AI Director.
 // All football maths happens HERE, in plain code, so the AI receives facts it can't miscount.
@@ -172,7 +173,10 @@ function ageStage(age) {
  * caRange / paRange / attrRanges and the briefing prints ranges instead of exact values.
  */
 function buildBriefing(dump, opts = {}) {
-  const maxTokens = opts.maxTokens || 3000;
+  // opts.tactic: the manager's tactic (briefing/tactic.js). Its section gets its own token allowance,
+  // so describing the tactic never squeezes the squad list.
+  const tacticBlock = opts.tactic ? tacticLines(opts.tactic) : [];
+  const maxTokens = (opts.maxTokens || 3000) + estimateTokens(tacticBlock.join('\n'));
   const meta = dump.meta || {}, club = dump.club || {};
   const realism = meta.realism || null;   // set by realism.perceive(): numbers are estimates
   const attrsOnly = meta.visibility === 'attributes';   // set by realism.fmView(): no CA/PA, position ratings instead
@@ -202,6 +206,12 @@ function buildBriefing(dump, opts = {}) {
     line(`REALISM ON: the Director's judging ability is ${realism.judging}/20. CA, PA and attributes are scouting ESTIMATES shown as ranges ` +
       `(the true value is inside the range). Hidden attributes: ${realism.hiddenKnown}. Personality: ${realism.personalityKnown}.`);
   line(`Date ${today} | manager ${meta.manager || '?'} | club reputation ${club.reputation ?? '?'}/10000 | money in GBP | data: ${meta.versionVerified === false ? 'UNVERIFIED FM version, numbers may be off' : 'true in-game values'}`);
+
+  // ---- tactic
+  line('');
+  line('## YOUR TACTIC');
+  if (tacticBlock.length) tacticBlock.forEach(line);
+  else line('No tactic set (the manager can describe it in tactic.txt in the TrueDoF folder).');
 
   // ---- finances
   line('');

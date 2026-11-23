@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server/server.js",
     "briefing": "node briefing/cli.js --print",
-    "test": "node --test briefing/test/briefing.test.js server/test/database.test.js server/test/server.test.js"
+    "test": "node --test briefing/test/briefing.test.js briefing/test/tactic.test.js server/test/database.test.js server/test/server.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.6.0"

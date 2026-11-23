@@ -146,8 +146,21 @@ $('settingsBtn').addEventListener('click', async () => {
   $('judging').value = s.settings.judging; $('judgingVal').textContent = s.settings.judging;
   $('effort').value = s.settings.effort;
   $('philosophy').value = s.settings.philosophy;
+  $('tacticText').textContent = tacticText(s.tactic, s.dataDir);
   $('settingsDlg').showModal();
 });
+function tacticText(t, dir) {
+  if (!t) return `No tactic yet. Create tactic.txt in ${dir} to describe it.`;
+  const f = t.formation || {};
+  return [
+    `${t.name || 'Unnamed tactic'}  (${f.inPossession || '?'} with the ball, ${f.outOfPossession || '?'} without)`,
+    `Style: ${t.style || 'not set'}`,
+    `Priority attributes: ${(t.priority || []).join(', ') || 'none'}`,
+    '', ...(t.slots || []),
+    '', `Attribute guide (wanted-player-attributes.txt): ${t.hasWantedAttributes ? 'loaded' : 'not found'}`,
+    ...((t.problems || []).length ? ['', 'Problems in the file:', ...t.problems.map(p => '- ' + p)] : []),
+  ].join('\n');
+}
 function viewLabel(s) {
   return s.visibility === 'everything' ? 'sees everything (CA/PA)' : s.visibility === 'scouted' ? `scouted estimates (judging ${s.judging}/20)` : 'sees what you see in FM';
 }

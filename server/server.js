@@ -16,6 +16,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { buildBriefing, estimateTokens } = require('../briefing/briefing');
 const { perceive, fmView } = require('../briefing/realism');
 const { systemPrompt, DEFAULT_PHILOSOPHY } = require('./director');
+const { readTactic, slotLabel, roleLabel } = require('../briefing/tactic');
 const { PlayerDatabase } = require('./database');
 const { TOOLS, runTool, describe } = require('./tools');
 
@@ -87,10 +88,21 @@ function readDump() { return readJson(path.join(DATA_DIR, 'dump-latest.json')); 
 /** The briefing exactly as the Director will see it (with realism applied if on). */
 function currentBriefing(settings) {
   const dump = readDump();
-  if (!dump) return { dump: null, text: null };
+  const tactic = readTactic(DATA_DIR);   // read fresh each time, so edits to tactic.txt apply at the next question
+  if (!dump) return { dump: null, text: null, tactic };
   const seen = settings.visibility === 'scouted' ? perceive(dump, settings.judging)
     : settings.visibility === 'attributes' ? fmView(dump) : dump;
-  return { dump, text: buildBriefing(seen) };
+  return { dump, text: buildBriefing(seen, { tactic }), tactic };
+}
+
+/** Short tactic summary for the settings dialog. */
+function tacticSummary(t) {
+  if (!t) return null;
+  return {
+    name: t.name, formation: t.formation, style: t.style, priority: t.priority, source: t.source,
+    slots: t.slots.map(s => `${slotLabel(s)}: ${roleLabel(s.inPossession)} / ${roleLabel(s.outOfPossession)}`),
+    hasWantedAttributes: !!t.wantedAttributes, problems: t.problems,
+  };
 }
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
@@ -172,7 +184,7 @@ async function chat(req, res) {
   if (!history.length || history[history.length - 1].role !== 'user') return send(res, 400, { error: 'Send a question first.' });
 
   const settings = readSettings();
-  const { dump, text: briefing } = currentBriefing(settings);
+  const { dump, text: briefing, tactic } = currentBriefing(settings);
 
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
   const event = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
@@ -183,7 +195,7 @@ async function chat(req, res) {
 
   const ctx = toolContext(dump, settings);
   const system = [
-    { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, visibility: settings.visibility, databaseReady: database.load() }) },
+    { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, visibility: settings.visibility, databaseReady: database.load(), hasTactic: !!(tactic && tactic.slots.length) }) },
     { type: 'text', text: `<club_briefing>\n${briefing}\n</club_briefing>`, cache_control: { type: 'ephemeral' } },
   ];
   const messages = [...history];   // grows with tool calls and results during this answer
@@ -274,9 +286,9 @@ async function handle(req, res) {
     }
     if (req.method === 'GET' && url.pathname === '/api/state') {
       const settings = readSettings();
-      const { dump, text } = currentBriefing(settings);
+      const { dump, text, tactic } = currentBriefing(settings);
       return send(res, 200, {
-        settings, model: MODEL, hasKey: !!process.env.ANTHROPIC_API_KEY, dataDir: DATA_DIR,
+        settings, model: MODEL, hasKey: !!process.env.ANTHROPIC_API_KEY, dataDir: DATA_DIR, tactic: tacticSummary(tactic),
         status: readJson(path.join(DATA_DIR, 'status.json')),
         dump: dump && { club: dump.club && dump.club.name, league: dump.club && dump.club.league, gameDate: dump.meta && dump.meta.gameDate,
           generatedAt: dump.meta && dump.meta.generatedAt, squad: (dump.squad || []).length, shortlist: (dump.shortlist || []).length },
