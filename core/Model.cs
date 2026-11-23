@@ -12,6 +12,7 @@ public sealed class Dump
     public LeagueTableInfo LeagueTable = new();
     public List<PlayerInfo> Shortlist = new();
     public List<ShortlistMiss> ShortlistNotFound = new();
+    public string ShortlistStatus;    // what TrueDoF found in shortlist.txt (helps when it's empty)
     public List<TransferInfo> Transfers = new();
     public List<string> Notes = new();
 }

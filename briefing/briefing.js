@@ -290,7 +290,8 @@ function buildBriefing(dump, opts = {}) {
   line('');
   line('## SHORTLIST: VERDICT INPUTS (sign / scout first / stretch / no)');
   const sl = dump.shortlist || [];
-  if (!sl.length) line('Shortlist is empty (add names to shortlist.txt and press F8 in FM).');
+  if (!sl.length && !(dump.shortlistNotFound || []).length)
+    line(`Shortlist is empty${dump.shortlistStatus ? ` (${dump.shortlistStatus})` : ' (add names to shortlist.txt and press F8 in FM)'}.`);
   sl.forEach(p => {
     // Where would he play, and who is there now?
     let bestSlot = null;

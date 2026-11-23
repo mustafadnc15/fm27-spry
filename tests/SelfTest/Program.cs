@@ -24,7 +24,7 @@ public static class Program
 
         var w = new World();
         File.WriteAllText(Path.Combine(outDir, "shortlist.txt"),
-            "# test shortlist\nTest Striker\nStriker @ rival\nNobody Here\nuid:" + w.YouthUid + "\n");
+            "\uFEFF# test shortlist\n#Commented Out\nTest Striker\nStriker @ rival\nNobody Here\nuid:" + w.YouthUid + "\n");
 
         var s = new Settings { Host = "selftest", OutDir = outDir, ProbeEnabled = true, ProbeValues = "balance=12,345,678; points=31",
                                  ProbeInspect = "firstTeam; firstTeam +0x38" };
@@ -88,6 +88,9 @@ public static class Program
         Check("shortlist '@ rival' adds the other Striker", shortlist.Contains("Other Striker"));
         Check("shortlist uid entry", shortlist.Contains("Young Gun"));
         Check("shortlist no duplicates", shortlist.Count == shortlist.Distinct().Count());
+        var slStatus = json.GetProperty("shortlistStatus").GetString();
+        Check("shortlist status counts lines", slStatus.Contains("4 player line(s)"));
+        Check("shortlist status warns about # lines", slStatus.Contains("IGNORED") && slStatus.Contains("#Commented Out"));
         Check("shortlist miss reported", json.GetProperty("shortlistNotFound").EnumerateArray().Any(m => m.GetProperty("entry").GetString() == "Nobody Here"));
 
         var transfers = json.GetProperty("transfers").EnumerateArray().ToList();

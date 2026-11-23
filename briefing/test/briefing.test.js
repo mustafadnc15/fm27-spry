@@ -56,10 +56,11 @@ test('shortlist verdict inputs', () => {
 
 test('copes with missing data (old dump, no finances, empty shortlist)', () => {
   const d = fixture();
-  d.club = { name: 'X' }; d.shortlist = []; d.meta = {}; d.leagueTable = undefined;
+  d.club = { name: 'X' }; d.shortlist = []; d.shortlistNotFound = [];
+  d.shortlistStatus = "shortlist.txt: 0 player line(s) read. 3 line(s) start with # and were IGNORED"; d.meta = {}; d.leagueTable = undefined;
   d.squad.forEach(p => { delete p.morale; p.contract = null; });
   const text = buildBriefing(d);
-  assert.ok(text.includes('Shortlist is empty'));
+  assert.ok(text.includes('Shortlist is empty') && text.includes('IGNORED'));
   assert.ok(text.includes('Balance ?'));
 });
 

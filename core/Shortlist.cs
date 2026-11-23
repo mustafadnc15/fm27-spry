@@ -24,7 +24,23 @@ public sealed class Shortlist
         _m = m; _reader = reader; _scan = scan; _settings = settings; _diag = diag;
     }
 
-    public static string FilePath(Settings s) => Path.Combine(s.OutDir, "shortlist.txt");
+    public static string FilePath(Settings s)
+    {
+        string f = Path.Combine(s.OutDir, "shortlist.txt");
+        // Windows hides extensions, so "shortlist.txt" saved from Notepad can become shortlist.txt.txt.
+        string doubled = f + ".txt";
+        return !File.Exists(f) && File.Exists(doubled) ? doubled : f;
+    }
+
+    private static readonly string[] TemplateLines =
+    {
+        "# TrueDoF shortlist.",
+        "# Write ONE player per line BELOW these lines, WITHOUT a # in front. Then press F8 in FM.",
+        "# Lines starting with # are ignored. Examples of what you can write:",
+        "#   Erling Haaland",
+        "#   Haaland @ Man City      (add @ and the club when two players share a name)",
+        "#   uid:12345678            (FM's unique ID, if you know it)",
+    };
 
     public static void EnsureTemplate(Settings s)
     {
@@ -33,12 +49,7 @@ public sealed class Shortlist
             string f = FilePath(s);
             if (File.Exists(f)) return;
             Directory.CreateDirectory(s.OutDir);
-            File.WriteAllText(f,
-                "# TrueDoF shortlist: one player per line, then press F8 in FM.\n" +
-                "# Examples:\n" +
-                "#   Erling Haaland\n" +
-                "#   Haaland @ Man City\n" +
-                "#   uid:12345678\n");
+            File.WriteAllText(f, string.Join("\n", TemplateLines) + "\n");
         }
         catch { /* not critical */ }
     }
@@ -46,7 +57,9 @@ public sealed class Shortlist
     public HashSet<uint> Resolve(Dump dump)
     {
         var found = new HashSet<uint>();
-        var entries = ReadEntries();
+        var entries = ReadEntries(out string fileStatus);
+        dump.ShortlistStatus = fileStatus;
+        _diag.Add("Shortlist file: " + fileStatus);
         if (entries.Count == 0) return found;
 
         // Read names of all players once, but only if at least one entry is a name.
@@ -101,15 +114,27 @@ public sealed class Shortlist
     private IEnumerable<string> Variants(ulong person) =>
         _reader.NameVariants(person).Select(Normalize).Distinct();
 
-    private List<(string raw, string name, string club, uint uid)> ReadEntries()
+    private List<(string raw, string name, string club, uint uid)> ReadEntries(out string status)
     {
         var list = new List<(string, string, string, uint)>();
         string f = FilePath(_settings);
-        if (!File.Exists(f)) return list;
+        if (!File.Exists(f))
+        {
+            status = $"{f} does not exist. Create it (one player per line) and press F8 again.";
+            return list;
+        }
+        var templateSet = new HashSet<string>(TemplateLines.Select(t => t.Trim()));
+        var commentedNames = new List<string>();
         foreach (string line in File.ReadAllLines(f))
         {
-            string raw = line.Trim();
-            if (raw.Length == 0 || raw.StartsWith("#")) continue;
+            string raw = line.Trim().Trim('\uFEFF').Trim();
+            if (raw.Length == 0) continue;
+            if (raw.StartsWith("#"))
+            {
+                // A commented line that isn't part of our template is probably a name the user meant.
+                if (!templateSet.Contains(raw) && !raw.StartsWith("# TrueDoF") && !raw.StartsWith("# Examples")) commentedNames.Add(raw);
+                continue;
+            }
             if (raw.StartsWith("uid:", StringComparison.OrdinalIgnoreCase) && uint.TryParse(raw.Substring(4).Trim(), out uint uid))
             {
                 list.Add((raw, null, null, uid));
@@ -121,6 +146,10 @@ public sealed class Shortlist
             name = Normalize(name);
             if (name.Length > 0) list.Add((raw, name, string.IsNullOrEmpty(club) ? null : club, 0));
         }
+        status = $"{Path.GetFileName(f)}: {list.Count} player line(s) read";
+        if (f.EndsWith(".txt.txt")) status += " (note: the file is really called shortlist.txt.txt, that's fine)";
+        if (commentedNames.Count > 0)
+            status += $". {commentedNames.Count} line(s) start with # and were IGNORED, e.g. {string.Join(", ", commentedNames.Take(3).Select(c => $"'{c}'"))}. Remove the # to use them.";
         return list;
     }
 
