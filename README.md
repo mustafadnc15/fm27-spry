@@ -4,8 +4,14 @@ TrueDoF reads the **true** data of your FM27 save (real attributes, CA/PA, hidde
 attributes, contracts) straight from the game's memory. An AI "Director of Football" then
 reasons from that data instead of scout-report guesswork.
 
-Status: **Phases 1 and 2 are done and verified in-game. Phase 3 (the Director chat) is built
-and waiting for your test.** The one-click launcher (Phase 4) comes next.
+Status: **everything below is built and verified in-game** on FM27 27.1 (Game Pass):
+- the memory reader;
+- the briefing;
+- the Director chat, which knows your tactic;
+- the overlay window over FM;
+- the one-click launcher.
+
+Not yet available: the league table and FM's own shortlist.
 
 Rules TrueDoF follows:
 
@@ -15,6 +21,52 @@ Rules TrueDoF follows:
   `status.json` and `diagnostics.txt`.
 - **One output folder:** `%LOCALAPPDATA%\TrueDoF\` (paste that into the Explorer address
   bar).
+
+---
+
+## Quick start (no technical knowledge needed)
+
+### What you need (one time)
+
+| What | Where | Why |
+|---|---|---|
+| **BepInEx 6** (IL2CPP, x64) inside your FM27 folder | Phase 1, step 1 below | Lets TrueDoF run inside FM |
+| **.NET 8 SDK** | <https://dotnet.microsoft.com/download> (the "SDK") | Builds the plugin and the overlay |
+| **Node.js LTS** | <https://nodejs.org> | Runs the Director chat |
+| **An Anthropic API key** | <https://console.anthropic.com> → API Keys | The Director is Claude; about a cent per question |
+
+### Set up (one time, about 10 minutes)
+
+1. Install BepInEx into FM27 (Phase 1, step 1 below), start FM once and quit it.
+2. **Close FM**, then double-click **`Install-Plugin.bat`** in this folder. It finds your FM27
+   folder (Game Pass or Steam), builds the plugin and copies it in. If it can't find FM, it
+   asks you to paste the folder that contains `fm.exe`.
+3. Double-click **`TrueDoF.bat`**. The first time, it creates a `.env` file and opens it in
+   Notepad. Paste your API key after `ANTHROPIC_API_KEY=`, save, and double-click
+   `TrueDoF.bat` again.
+
+### Every time you play
+
+1. Start FM27 and load your save.
+2. Press **F8** in FM. TrueDoF reads your squad, finances, tactic and the player database
+   (5–30 seconds).
+3. Double-click **`TrueDoF.bat`**. The Director opens in a small window on top of FM.
+4. Press **F9** (also inside FM) to show or hide the Director.
+   - The window fades when you click back into FM.
+   - **↻ Refresh** in the window does the same as F8.
+   - Drag and resize the window where you like; it remembers its place.
+
+Prefer your browser? Run `TrueDoF.bat browser` instead. The chat is then at
+<http://localhost:8766>.
+
+**Display mode:** the window shows over FM in FM27's normal "Fullscreen" mode (it is
+borderless). If it ever stays hidden behind FM, switch FM to windowed or borderless:
+Preferences → Audio & Visual → Screen Resolution and Mode.
+
+**After a TrueDoF update:** close FM and run `Install-Plugin.bat` again. If the overlay looks
+outdated, delete the `overlay\bin` folder and run `TrueDoF.bat` again (it rebuilds itself).
+
+Something wrong? See **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**.
 
 ---
 
@@ -324,6 +376,7 @@ you see in the game.
 core/      all logic (memory reading, scanning, club dump, shortlist, probe, output)
 briefing/  Phase 2: dump → briefing text, plus realism (Node.js, no dependencies)
 server/    Phase 3: the Director chat web app (Node.js + Anthropic SDK), database search tools
+overlay/   the always-on-top Director window over FM (.NET 8 WinForms + WebView2, F9)
 plugin/    BepInEx entry point (TrueDoF.dll)
 cli/       external reader (TrueDoF.Cli.exe)
 tests/     self-test with a fake FM memory image (runs on any OS)

@@ -3,7 +3,7 @@ namespace TrueDoF;
 /// <summary>
 /// WHERE things live in FM's memory, per FM version ("offsets"). If an FM patch breaks
 /// TrueDoF, this is almost always the only file that needs new numbers.
-/// See TROUBLESHOOTING.md (Phase 4) and diagnostics.txt for how to re-find them.
+/// See TROUBLESHOOTING.md section 7 ("It broke after an FM patch") and diagnostics.txt for how to re-find them.
 ///
 /// Values are facts about FM's memory layout, documented in docs/how-fmsuperscout-reads-data.md.
 /// "block" = the player block, "person" = the person block (block + class offset).
