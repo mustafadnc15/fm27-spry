@@ -96,3 +96,47 @@ test('very large squads are trimmed to the token budget', () => {
   assert.ok(estimateTokens(text) <= 3000);
   assert.ok(text.includes('shown)'));
 });
+
+// ---------------------------------------------------------------- realism
+const { perceive } = require('../realism');
+
+test('realism: true value always inside the range, wider when judging is worse', () => {
+  const d = fixture();
+  for (const J of [1, 5, 10, 15, 20]) {
+    const v = perceive(d, J);
+    v.squad.forEach((p, i) => {
+      const t = d.squad[i];
+      assert.ok(p.caRange[0] <= t.ca && t.ca <= p.caRange[1], `CA outside range at J${J}`);
+      assert.ok(p.paRange[0] <= t.pa && t.pa <= p.paRange[1], `PA outside range at J${J}`);
+      for (const [k, r] of Object.entries(p.attrRanges)) {
+        const tv = t.technical[k] ?? t.mental[k] ?? t.physical[k] ?? t.goalkeeping[k];
+        assert.ok(r[0] <= tv && tv <= r[1], `${k} outside range at J${J}`);
+      }
+    });
+  }
+  const width = J => { const v = perceive(d, J); return v.shortlist.reduce((t, p) => t + p.caRange[1] - p.caRange[0], 0); };
+  assert.ok(width(3) > width(12) && width(12) > width(19));
+});
+
+test('realism: estimates are stable (no re-rolling) and own players are clearer', () => {
+  const d = fixture();
+  assert.deepStrictEqual(perceive(d, 8).shortlist[0].caRange, perceive(d, 8).shortlist[0].caRange);
+  const v = perceive(d, 6);
+  const ownW = v.squad[0].caRange[1] - v.squad[0].caRange[0];
+  const otherW = v.shortlist[0].caRange[1] - v.shortlist[0].caRange[0];
+  assert.ok(ownW < otherW);
+});
+
+test('realism: low judging hides hidden attributes; facts are untouched; briefing shows ranges', () => {
+  const d = fixture();
+  const v = perceive(d, 4);
+  assert.strictEqual(v.shortlist[0].hidden, undefined);
+  assert.strictEqual(v.shortlist[0].personality, undefined);
+  assert.strictEqual(v.squad[0].contract.wageWeekly, d.squad[0].contract.wageWeekly);
+  assert.strictEqual(v.squad[0].age, d.squad[0].age);
+  assert.strictEqual(d.squad[0].caRange, undefined, 'original dump must not be modified');
+  const text = buildBriefing(v);
+  assert.ok(text.includes('REALISM ON'));
+  assert.ok(/CA\d+-\d+ (weak|average|decent|good|very good|excellent|world class)/.test(text));
+  assert.ok(estimateTokens(text) <= 3000);
+});

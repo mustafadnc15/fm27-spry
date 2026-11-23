@@ -4,9 +4,8 @@ TrueDoF reads the **true** data of your FM27 save (real attributes, CA/PA, hidde
 attributes, contracts) straight from the game's memory. An AI "Director of Football" then
 reasons from that data instead of scout-report guesswork.
 
-Status: **Phase 1 (game plugin) is done and verified in-game. Phase 2 (briefing builder) is
-built and waiting for your test.** The chat app (Phase 3) and the one-click launcher
-(Phase 4) come next.
+Status: **Phases 1 and 2 are done and verified in-game. Phase 3 (the Director chat) is built
+and waiting for your test.** The one-click launcher (Phase 4) comes next.
 
 Rules TrueDoF follows:
 
@@ -127,11 +126,58 @@ The maths is done by plain code, not by the AI, so the numbers are always right.
    It prints the briefing and saves it as `%LOCALAPPDATA%\TrueDoF\briefing.txt`.
 
 An example made from a test squad is in `docs/examples/briefing-sample.txt`. To run the
-tests, use `npm test`.
+tests, use `npm test`. They include an end-to-end run of the chat app against a fake
+Anthropic API, so no key or internet is needed.
 
 ---
 
-## What's in the dump (and what isn't yet)
+## Phase 3: talk to your Director
+
+A small web app on your own PC at <http://localhost:8766>. Each question goes to Claude
+(Anthropic's AI, model **Claude Sonnet 5.5**) together with the briefing and the Director's
+instructions. He has a club philosophy, argues with you, and gives every transfer target a
+**SIGN / SCOUT FIRST / STRETCH / NO** verdict.
+
+### One-time setup
+
+1. Get an API key at <https://console.anthropic.com> → API Keys. The API is paid per use; a
+   question typically costs about a cent.
+2. In this project folder, copy `.env.example` to `.env`, open it in Notepad and paste your key
+   after `ANTHROPIC_API_KEY=`. The `.env` file stays on your PC and is never uploaded.
+3. Install the one dependency (Anthropic's official library), in this project folder:
+
+   ```bash
+   npm install
+   ```
+
+### Every time
+
+1. Start FM27, load your save and press **F8** (or use **Refresh from FM** in the app later).
+2. In this project folder, run:
+
+   ```bash
+   npm start
+   ```
+
+3. Open <http://localhost:8766> in your browser and ask away. Leave the terminal window open
+   while you chat; close it to stop the app.
+
+### Buttons and settings
+
+- **Refresh from FM**: asks the plugin for fresh data, the same as pressing F8 in the game.
+- **What he sees**: shows the exact briefing the Director reads.
+- **Settings**:
+  - **Realism**: when on, he only sees scouting **estimates**. CA, PA and attributes become
+    ranges, and the worse his **judging ability** (1–20), the wider the ranges. The true value
+    is always inside the range. Asking again doesn't change the estimate. He knows your own
+    players better than other clubs' players. Hidden attributes and personality only show up
+    with decent judging ability. Contracts, wages, ages and finances are facts and are never
+    blurred.
+  - **How hard he thinks**: low, medium or high (medium is recommended).
+  - **Club philosophy**: the principles he holds you to.
+- Your conversation is kept in your browser. **New chat** starts over.
+
+
 
 | Data | Status |
 |---|---|
@@ -182,7 +228,8 @@ you see in the game.
 
 ```
 core/      all logic (memory reading, scanning, club dump, shortlist, probe, output)
-briefing/  Phase 2: dump → briefing text (Node.js, no dependencies)
+briefing/  Phase 2: dump → briefing text, plus realism (Node.js, no dependencies)
+server/    Phase 3: the Director chat web app (Node.js + Anthropic SDK)
 plugin/    BepInEx entry point (TrueDoF.dll)
 cli/       external reader (TrueDoF.Cli.exe)
 tests/     self-test with a fake FM memory image (runs on any OS)

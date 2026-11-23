@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TrueDoF Director</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <strong>TrueDoF</strong> <span class="muted">Director of Football</span>
+    </div>
+    <div id="clubline" class="muted">Loading…</div>
+    <div class="actions">
+      <button id="refreshBtn" title="Ask the FM plugin for fresh data (same as pressing F8 in the game)">Refresh from FM</button>
+      <button id="briefingBtn" title="Show exactly what the Director reads">What he sees</button>
+      <button id="settingsBtn">Settings</button>
+      <button id="newBtn" title="Start a new conversation">New chat</button>
+    </div>
+  </header>
+
+  <div id="notice" class="notice hidden"></div>
+
+  <main id="chat" aria-live="polite"></main>
+
+  <div id="starters" class="starters">
+    <button>Where is the squad weakest?</button>
+    <button>Give me verdicts on my shortlist.</button>
+    <button>Who should we sell this window?</button>
+    <button>Which contracts should we renew, and which should we let run down?</button>
+    <button>Which youngsters deserve first-team minutes?</button>
+  </div>
+
+  <form id="composer">
+    <textarea id="input" rows="2" placeholder="Ask your Director… (Enter to send, Shift+Enter for a new line)"></textarea>
+    <button id="sendBtn" type="submit">Send</button>
+  </form>
+
+  <dialog id="settingsDlg">
+    <form method="dialog" id="settingsForm">
+      <h2>Director settings</h2>
+      <label class="row"><input type="checkbox" id="realism"> <span><strong>Realism</strong>: he only sees scouting estimates (ranges), not the true numbers</span></label>
+      <label>Judging ability: <strong id="judgingVal">12</strong>/20 <span class="muted">(how good his eye is: wider ranges when lower)</span>
+        <input type="range" id="judging" min="1" max="20" step="1">
+      </label>
+      <label>How hard he thinks
+        <select id="effort">
+          <option value="low">Low: quick answers</option>
+          <option value="medium">Medium: balanced (recommended)</option>
+          <option value="high">High: slower, more thorough</option>
+        </select>
+      </label>
+      <label>Club philosophy <span class="muted">(he holds you to this)</span>
+        <textarea id="philosophy" rows="6"></textarea>
+      </label>
+      <div class="dlg-actions">
+        <button value="cancel" formnovalidate>Cancel</button>
+        <button id="saveSettings" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="briefingDlg">
+    <h2>What the Director sees</h2>
+    <p class="muted" id="briefingMeta"></p>
+    <pre id="briefingText"></pre>
+    <form method="dialog" class="dlg-actions"><button>Close</button></form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
