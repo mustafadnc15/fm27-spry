@@ -48,7 +48,13 @@ public sealed class Layout
     // ConFlags bits: 0 = transfer listed, 1 = loan listed (confirmed by FMLibreEditor and FM OpenEditor).
     public int ConSquadStatus = 0x54;   // byte code, grouped as in SquadStatusGroups below (FMLibreEditor census)
 
-    /// <summary>FM squad-status codes → group. Codes not listed are reported as "unknown (N)".</summary>
+    /// <summary>FM's exact squad-status names, confirmed in the user's save.</summary>
+    public static readonly Dictionary<int, string> SquadStatusNames = new()
+    {
+        [1] = "Star Player", [2] = "Important Player",
+    };
+
+    /// <summary>FM squad-status codes → group (FMLibreEditor census). Codes not listed are "unknown".</summary>
     public static readonly Dictionary<int, string> SquadStatusGroups = new()
     {
         [1] = "key player", [2] = "key player", [15] = "key player",

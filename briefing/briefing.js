@@ -244,9 +244,9 @@ function buildBriefing(dump, opts = {}) {
   }
   // Promised playing time vs reality (squad status from the contract)
   for (const p of pool) {
-    const st = p.contract && p.contract.squadStatus;
-    if ((st === 'key player' || st === 'regular starter') && !xiIds.has(p.uid))
-      weak.push(`${p.name} has squad status "${st}" but is not in the best XI (playing-time promise at risk)`);
+    const grp = p.contract && p.contract.squadStatusGroup;
+    if ((grp === 'key player' || grp === 'regular starter') && !xiIds.has(p.uid))
+      weak.push(`${p.name} has squad status "${p.contract.squadStatus}" but is not in the best XI (playing-time promise at risk)`);
   }
   (weak.length ? weak : ['none obvious']).forEach(w => line(`- ${w}`));
 

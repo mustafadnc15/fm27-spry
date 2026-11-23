@@ -71,7 +71,8 @@ public static class Program
             Check("ace contract", ace.GetProperty("contract").GetProperty("wageWeekly").GetInt64() == 50_000
                                   && ace.GetProperty("contract").GetProperty("expires").GetString() == "2029-06-30"
                                   && ace.GetProperty("contract").GetProperty("transferListed").GetBoolean()
-                                  && ace.GetProperty("contract").GetProperty("squadStatus").GetString() == "regular starter");
+                                  && ace.GetProperty("contract").GetProperty("squadStatus").GetString() == "regular starter (code 3)"
+                                  && ace.GetProperty("contract").GetProperty("squadStatusGroup").GetString() == "regular starter");
             Check("ace nationality", ace.GetProperty("nationality").GetString() == "Testland");
             Check("ace first team", ace.GetProperty("team").GetString() == "first team");
             Check("ace morale 7 = Slightly Poor", ace.GetProperty("morale").GetInt32() == 7 && ace.GetProperty("moraleLevel").GetString() == "Slightly Poor");

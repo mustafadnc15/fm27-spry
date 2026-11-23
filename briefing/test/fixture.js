@@ -33,7 +33,7 @@ function player(name, age, positions, ca, pa, wage, expires, extra = {}) {
     hidden: { consistency: r(6, 16), dirtiness: r(3, 12), importantMatches: r(6, 16), injuryProneness: r(3, 14), versatility: r(5, 15) },
     personality: { adaptability: r(5, 18), ambition: r(5, 18), loyalty: r(5, 18), pressure: r(6, 18), professionalism: r(6, 18), sportsmanship: r(6, 18), temperament: r(6, 18), controversy: r(1, 10) },
     preferredFoot: 'right', heightCm: 180,
-    contract: { wageWeekly: wage, expires, squadNumber: null, transferListed: false, loanListed: false, squadStatusCode: 4, squadStatus: 'fringe' },
+    contract: { wageWeekly: wage, expires, squadNumber: null, transferListed: false, loanListed: false, squadStatusCode: 4, squadStatus: 'fringe (code 4)', squadStatusGroup: 'fringe' },
     valueGbp: ca * 15000, askingPriceGbp: null, reputationCurrent: 2000, morale: r(8, 20), moraleLevel: 'x', notes: [],
     ...extra,
   };

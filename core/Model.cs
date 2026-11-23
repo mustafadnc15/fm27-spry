@@ -104,7 +104,8 @@ public sealed class ContractInfo
     public bool TransferListed, LoanListed;
     public int ListingFlagsRaw;   // raw listing byte (bit 0 transfer listed, bit 1 loan listed; other bits being checked)
     public int? SquadStatusCode;
-    public string SquadStatus;    // key player / regular starter / fringe / prospect / surplus / not needed
+    public string SquadStatus;        // FM's own name if known (e.g. "Star Player"), else the group + code
+    public string SquadStatusGroup;   // key player / regular starter / fringe / prospect / surplus / not needed
 }
 
 public sealed class LeagueTableInfo

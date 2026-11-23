@@ -96,7 +96,9 @@ public sealed class PlayerReader
             if (ss is >= 1 and <= 30)
             {
                 p.Contract.SquadStatusCode = ss;
-                p.Contract.SquadStatus = Layout.SquadStatusGroups.TryGetValue(ss, out var g) ? g : $"unknown ({ss})";
+                string group = Layout.SquadStatusGroups.TryGetValue(ss, out var g) ? g : "unknown";
+                p.Contract.SquadStatusGroup = group;
+                p.Contract.SquadStatus = Layout.SquadStatusNames.TryGetValue(ss, out var n) ? n : $"{group} (code {ss})";
             }
             p.Club = ClubName(ContractClub(person));
         }

@@ -48,9 +48,9 @@ test('contracts, youth, wages, morale', () => {
 test('squad status vs best XI is flagged', () => {
   const d = fixture();
   const bench = d.squad.find(p => p.name === 'Bench Mid');
-  bench.contract.squadStatus = 'key player';
+  bench.contract.squadStatus = 'Star Player'; bench.contract.squadStatusGroup = 'key player';
   const text = buildBriefing(d);
-  assert.ok(text.includes('Bench Mid has squad status "key player" but is not in the best XI'));
+  assert.ok(text.includes('Bench Mid has squad status "Star Player" but is not in the best XI'));
 });
 
 test('shortlist shows loans and arranged transfers', () => {
