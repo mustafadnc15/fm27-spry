@@ -4,8 +4,9 @@ TrueDoF reads the **true** data of your FM27 save (real attributes, CA/PA, hidde
 attributes, contracts) straight from the game's memory. An AI "Director of Football" then
 reasons from that data instead of scout-report guesswork.
 
-Status: **Phase 1 (game plugin) is built and waiting for in-game testing.** The briefing
-builder (Phase 2), the chat app (Phase 3) and the one-click launcher (Phase 4) come next.
+Status: **Phase 1 (game plugin) is done and verified in-game. Phase 2 (briefing builder) is
+built and waiting for your test.** The chat app (Phase 3) and the one-click launcher
+(Phase 4) come next.
 
 Rules TrueDoF follows:
 
@@ -99,6 +100,37 @@ writes the same files.
 
 ---
 
+## Phase 2: the briefing
+
+The briefing turns `dump-latest.json` into a short text summary of about 1,500–3,000
+tokens. That's what the AI Director reads. It contains:
+
+- finances and wage headroom;
+- the best XI by CA (it tries 4-2-3-1, 4-3-3, 4-4-2 and 3-5-2 and keeps the strongest);
+- depth per position and weak spots;
+- contracts ending within 12 months;
+- wage structure and morale;
+- high-potential youth;
+- verdict inputs for every shortlist player: upgrade or not, affordability, contract
+  situation and character.
+
+The maths is done by plain code, not by the AI, so the numbers are always right.
+
+1. Install **Node.js LTS** from <https://nodejs.org> (one time).
+2. Press F8 in FM so the dump is fresh.
+3. In this project folder, run:
+
+   ```bash
+   node briefing/cli.js --print
+   ```
+
+   It prints the briefing and saves it as `%LOCALAPPDATA%\TrueDoF\briefing.txt`.
+
+An example made from a test squad is in `docs/examples/briefing-sample.txt`. To run the
+tests, use `npm test`.
+
+---
+
 ## What's in the dump (and what isn't yet)
 
 | Data | Status |
@@ -150,6 +182,7 @@ you see in the game.
 
 ```
 core/      all logic (memory reading, scanning, club dump, shortlist, probe, output)
+briefing/  Phase 2: dump → briefing text (Node.js, no dependencies)
 plugin/    BepInEx entry point (TrueDoF.dll)
 cli/       external reader (TrueDoF.Cli.exe)
 tests/     self-test with a fake FM memory image (runs on any OS)

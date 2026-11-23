@@ -1,0 +1,10 @@
+{
+  "name": "truedof",
+  "version": "0.2.0",
+  "private": true,
+  "description": "TrueDoF: an AI Director of Football for Football Manager 27",
+  "scripts": {
+    "briefing": "node briefing/cli.js --print",
+    "test": "node --test briefing/test/briefing.test.js"
+  }
+}
