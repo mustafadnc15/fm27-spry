@@ -318,12 +318,17 @@ function describeRules(model) {
   return model.rules.map(r => `${r.attr} ${r.kind === 'special' ? `${r.lo}+` : `${r.lo}-${r.hi}`} (${words[r.kind]})`).join(', ');
 }
 
+// Purity's FM27 study (FM-Arena, see docs/credits.md), used when the manager has no table of his own.
+const BUILT_IN_WEIGHTS = path.join(__dirname, '..', 'docs', 'engine-weights-study.txt');
+
 function readEngineWeights(dataDir, problems) {
-  const file = path.join(dataDir, 'role-to-attribute.txt');
+  const own = path.join(dataDir, 'role-to-attribute.txt');
   try {
-    if (!fs.existsSync(file)) return null;
+    const file = fs.existsSync(own) ? own : fs.existsSync(BUILT_IN_WEIGHTS) ? BUILT_IN_WEIGHTS : null;
+    if (!file) return null;
     const e = parseEngineWeights(fs.readFileSync(file, 'utf8'));
-    if (!e) problems.push('role-to-attribute.txt: no "Attribute Team ST AM WB CB DM" table found');
+    if (!e) problems.push(`${path.basename(file)}: no "Attribute Team ST AM WB CB DM" table found`);
+    else e.source = file === own ? 'role-to-attribute.txt' : 'built-in study by Purity (FM-Arena)';
     return e;
   } catch (err) {
     problems.push(`could not read role-to-attribute.txt: ${err.message}`);
@@ -349,7 +354,7 @@ function loadModel(dataDir) {
 /** What drives the rating, for the briefing. */
 function describeModel(model) {
   const parts = [];
-  if (model.engine) parts.push('measured match-engine value per attribute and position (role-to-attribute.txt, confirmed effects only)');
+  if (model.engine) parts.push(`measured match-engine value per attribute and position (${model.engine.source || 'role-to-attribute.txt'}, confirmed effects only)`);
   if (model.rules.length) parts.push(`the manager's attribute guide: ${describeRules(model)}`);
   parts.push(`FM role attributes ${Math.round(model.roleWeight * 100)}%`);
   return parts.join('; ');

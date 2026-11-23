@@ -212,8 +212,10 @@ Put two plain text files in `%LOCALAPPDATA%\TrueDoF\`:
   (`++` top priority, `+` priority, `*` counts most above the low end) and
   "Minimum requirements: … Work Rate …" into scoring curves.
 - `role-to-attribute.txt` (optional): a measured table of goals per season per attribute and
-  position group (`Attribute Team ST AM WB CB DM`, `*` = confirmed). When it's there, it drives
-  most of the rating. Only confirmed values are used.
+  position group (`Attribute Team ST AM WB CB DM`, `*` = confirmed). It drives most of the
+  rating, and only confirmed values are used. Without it, TrueDoF uses the built-in copy of
+  Purity's FM27 study ([FM-Arena thread](https://fm-arena.com/threads/attribute-importance-by-position-in-fm27-a-test-on-my-own-tactic.125/),
+  `docs/engine-weights-study.txt`).
 - `roles.txt` (optional): correct a role's highlighted attributes, one role per line:
   `Second Striker = key: Finishing, Off the Ball, Acceleration | pref: Dribbling, Composure`.
 

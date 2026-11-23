@@ -1,0 +1,68 @@
+Source: "Attribute importance by position in FM27: a test on my own tactic" by Purity, FM-Arena
+https://fm-arena.com/threads/attribute-importance-by-position-in-fm27-a-test-on-my-own-tactic.125/
+Copied here with the manager's permission as the reference for TrueDoF's tactic rating. TrueDoF reads its own copy
+from %LOCALAPPDATA%\TrueDoF\role-to-attribute.txt (the table below, unchanged).
+
+I replayed FM27's real match engine outside the game (a harness injected into the game) to check whether the value of an attribute depends on the position, in my tactic. Other testers found no clear position differences with small +5 tests; I wanted enough power to see one.
+
+Setup​
+Brentford (mid-table), a saved 38-match Premier League season with real opponents. My 3-4-2-1: 3 CB, 2 WB, 2 DM, 2 AM, 1 ST. Goalkeeper and opponents never change. My team uses the game's assistant for substitutions (about 3-4 a match).
+
+Method​
+In every simulation, every attribute of every outfield player gets its real level plus a random shift of -5 to +5 (clamped 1-20): 10 players x 50 attributes change at once.
+50,000 such configurations x 4 seeds = 200,000 simulated matches; the 38 fixtures rotate.
+For each configuration I sum the level changes per position group and regress the goal difference on them (fixed effect per fixture, errors clustered by configuration). Each coefficient is the value of +1 level of one attribute in ONE player of that position, in goals per season. Points and xPts were stored too.
+***** = significant (|z| > 2) with the same sign in both random halves of the data. Anything else should be read as "not shown".
+All 250 attribute x position effects come from the same runs: about 20x more precise than a one-attribute-at-a-time sweep of the same cost.
+Checks: fabricated data with a known effect was recovered (5.2% false alarms for 5% expected, no false "confirmed"). On 1,800 new configurations the weights predict points on about the right scale (slope 0.8-0.9). Effects add up across players (no diminishing returns, all |z| < 2); Jumping Reach is convex (worth more at high levels).
+Results​
+Goals per season for +1 level in one player (x0.7 is roughly real points). * = confirmed. 95% margin about +-0.09 ST, +-0.06 AM/WB/DM, +-0.05 CB. "Team" = one coefficient for the 10 outfield players. † = differs by position (p < 0.001). Sorted by team effect; all 50 attributes shown.
+Attribute	Team	ST	AM	WB	CB	DM
+Acceleration †	+0.34*	+0.70*	+0.30*	+0.33*	+0.34*	+0.23*
+Pace †	+0.34*	+0.90*	+0.39*	+0.40*	+0.23*	+0.11
+Jumping Reach †	+0.22*	+0.73*	+0.05	+0.10*	+0.35*	+0.09
+Stamina †	+0.19*	+0.34*	+0.20*	+0.28*	+0.14*	+0.09
+Anticipation †	+0.15*	+0.37*	+0.15*	+0.15*	+0.14*	+0.02
+Strength †	+0.14*	+0.21	+0.26*	+0.15*	+0.07	+0.08
+Dribbling	+0.10*	+0.13	+0.14*	+0.15	+0.04	+0.08
+Concentration	+0.09*	+0.26*	+0.08	+0.05	+0.10	+0.06
+Balance	+0.09*	+0.24*	+0.12*	+0.09	+0.08	+0.02
+Finishing †	+0.07*	+0.27*	+0.14*	+0.06	0	+0.04
+Pressure	+0.06*	+0.13*	+0.01	+0.05	+0.08	+0.07
+Important Matches	+0.06*	+0.15	+0.05	+0.06	+0.04	+0.07
+Determination	+0.06*	+0.09	+0.07	+0.01	+0.07*	+0.05
+Vision	+0.04	+0.02	+0.02	+0.04	+0.06	+0.02
+Dirtiness	-0.04	-0.03	-0.05	-0.04	-0.05	0
+First Touch	+0.03	+0.10	-0.01	+0.04	+0.01	+0.08
+Work Rate	+0.03	+0.01	+0.02	-0.01	+0.06	+0.05
+Composure	+0.03	+0.01	+0.06	+0.04	-0.01	+0.07
+Professionalism	+0.03	+0.01	+0.05	+0.01	+0.06	+0.01
+Heading	+0.03	+0.15	+0.07	-0.04	+0.03	+0.01
+Long Shots	+0.03	-0.03	+0.09	+0.05	0	0
+Technique	+0.02	+0.07	+0.01	+0.02	+0.01	+0.03
+Free Kicks	+0.02	+0.01	+0.03	+0.01	+0.03	+0.03
+Decisions	+0.02	+0.08	+0.02	+0.04	0	+0.01
+Penalty Taking	-0.02	-0.02	-0.03	-0.01	-0.02	+0.01
+Adaptability	+0.02	0	+0.04	-0.02	+0.04	-0.01
+Positioning	-0.02	-0.06	+0.01	-0.04	-0.01	-0.02
+Bravery	+0.01	-0.01	+0.05	-0.02	+0.01	+0.03
+Loyalty	-0.01	0	-0.03	0	-0.04	+0.03
+Aggression	-0.01	+0.02	-0.01	0	-0.04	-0.01
+Injury Proneness	+0.01	+0.03	0	-0.06	+0.04	+0.05
+Off The Ball	-0.01	-0.01	-0.03	+0.02	-0.02	-0.01
+Marking	-0.01	+0.07	-0.01	-0.03	-0.04	+0.02
+Versatility	-0.01	+0.03	0	-0.07	0	+0.01
+Temperament	-0.01	-0.05	+0.06	0	-0.04	-0.01
+Flair	-0.01	-0.01	+0.02	+0.01	0	-0.06
+Ambition	+0.01	+0.03	-0.01	-0.03	+0.01	+0.03
+Long Throws	-0.01	-0.01	-0.02	+0.06	-0.02	0
+Crossing	+0.01	-0.01	0	+0.05	-0.03	0
+Tackling	0	-0.08	+0.05	-0.02	+0.02	-0.05
+Natural Fitness	0	+0.01	+0.01	+0.01	-0.02	-0.01
+Passing	0	-0.01	-0.03	+0.01	0	-0.01
+Agility	0	-0.09	+0.02	-0.03	0	+0.05
+Teamwork	0	0	+0.01	-0.03	-0.01	+0.02
+Corners	0	-0.05	+0.02	+0.01	-0.03	0
+Consistency	0	+0.07	-0.02	0	+0.01	-0.01
+Sportsmanship	0	+0.04	+0.03	-0.02	-0.02	0
+Leadership	0	-0.01	-0.01	+0.01	0	0

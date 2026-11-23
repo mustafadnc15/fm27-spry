@@ -11,5 +11,14 @@ Manager's memory layout, and those facts were documented by others first. Thank 
 | [barak14/fm-editor](https://github.com/barak14/fm-editor) | GPL-3.0 | Morale byte at +0x26C with FM's labels; the warning that small clubs use a smaller finance record |
 | [Jackhamerp24/Football-Manager-27-Editor](https://github.com/Jackhamerp24/Football-Manager-27-Editor) | GPL-3.0 | Per-build offset files that confirm the same finance offsets |
 
+## Tactic rating
+
+- **Purity, FM-Arena**: ["Attribute importance by position in FM27: a test on my own tactic"](https://fm-arena.com/threads/attribute-importance-by-position-in-fm27-a-test-on-my-own-tactic.125/),
+  a 200,000-match regression of goals per season on every attribute by position group. Its confirmed effects drive
+  most of TrueDoF's tactic rating. A copy is in `docs/engine-weights-study.txt`.
+- **Role attributes**: Passion4FM's FM26 role guides (Advanced Wing-Back, Channel Midfielder, Overlapping
+  Centre-Back, Screening CM) and FM Scout's FM26 role list. The other roles use FM24's highlights or TrueDoF's
+  estimates; `briefing/roles.js` marks the source of each.
+
 No code from these projects is copied into TrueDoF; they were cloned read-only into the
 git-ignored `reference/` folder for study.

@@ -149,7 +149,8 @@ test('Director app end to end', async t => {
       assert.strictEqual(s.tactic.name, 'Test Press');
       assert.deepStrictEqual(s.tactic.priority, ['pace']);
       assert.strictEqual(s.tactic.slots[1], '2. DM→DC: Defensive Midfielder / Centre-Back [DM, FM24 equivalent] [CB, FM24 equivalent]');
-      assert.match(s.tactic.rating, /FM role attributes 40%/);
+      assert.match(s.tactic.rating, /built-in study by Purity .*FM role attributes 25%/);
+      assert.strictEqual(s.tactic.hasEngineWeights, true);
       assert.ok(s.tactic.problems.some(p => /11/.test(p)));
       assert.match((await request(port, 'GET', '/api/briefing')).text, /## YOUR TACTIC\nTactic "Test Press"/);
       await request(port, 'POST', '/api/chat', { messages: [{ role: 'user', content: 'Who fits?' }] });
