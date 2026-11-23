@@ -3,6 +3,16 @@
 // and sent to the local server with each question.
 
 const $ = id => document.getElementById(id);
+
+// Compact layout for the in-game overlay window (TrueDoF.Overlay opens /?compact=1): smaller, shorter labels.
+const COMPACT = new URLSearchParams(location.search).get('compact') === '1';
+if (COMPACT) {
+  document.body.classList.add('compact');
+  for (const [id, label] of [['refreshBtn', '↻ Refresh'], ['briefingBtn', 'Briefing'], ['settingsBtn', '⚙'], ['newBtn', 'New']]) {
+    const b = document.getElementById(id);
+    if (b) { b.dataset.label = label; b.textContent = label; }
+  }
+}
 const chatEl = $('chat'), input = $('input'), sendBtn = $('sendBtn');
 const STORE = 'truedof-chat-v1';
 let history = load();
@@ -129,7 +139,7 @@ $('refreshBtn').addEventListener('click', async () => {
     if (!r.ok) notice(r.message || ('FM dump failed: ' + (r.status && r.status.message)));
     else await refreshState();
   } catch { notice('Refresh failed: lost connection to the TrueDoF app.'); }
-  b.disabled = false; b.textContent = 'Refresh from FM';
+  b.disabled = false; b.textContent = b.dataset.label || 'Refresh from FM';
 });
 
 $('briefingBtn').addEventListener('click', async () => {

@@ -73,3 +73,23 @@ fieldset.vis label { margin: 8px 0; }
 fieldset.tactic { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin: 0; }
 #tacticText { white-space: pre-wrap; font: 12px/1.4 ui-monospace, Consolas, monospace; max-height: 30vh; overflow: auto; margin: 6px 0; }
 #judgingRow.disabled { opacity: .45; }
+
+/* ---- compact layout for the in-game overlay (?compact=1) ---- */
+body.compact { font-size: 13.5px; }
+body.compact header { padding: 6px 10px; gap: 4px 8px; }
+body.compact .brand { display: none; }
+body.compact #clubline { font-size: 12px; min-width: 0; flex-basis: 100%; order: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.compact .actions { gap: 4px; }
+body.compact button { padding: 3px 9px; border-radius: 6px; font-size: 12.5px; }
+body.compact .notice { margin: 6px 10px 0; padding: 6px 8px; font-size: 12.5px; }
+body.compact main { padding: 10px; gap: 8px; }
+body.compact .msg { padding: 7px 10px; border-radius: 10px; max-width: 100%; }
+body.compact .msg h3 { font-size: 13.5px; }
+body.compact .starters { flex-wrap: nowrap; overflow-x: auto; padding: 0 10px 6px; }
+body.compact .starters button { white-space: nowrap; font-size: 12px; }
+body.compact form#composer { padding: 6px 10px 10px; gap: 6px; }
+body.compact #input { min-height: 38px; padding: 7px 8px; }
+body.compact dialog { width: calc(100vw - 16px); padding: 12px; }
+body.compact .tool-note { font-size: 12px; padding: 0 10px; }
+.hint { display: none; }
+body.compact .hint { display: block; text-align: center; font-size: 11px; color: var(--muted); padding: 0 0 6px; }
