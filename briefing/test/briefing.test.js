@@ -140,3 +140,22 @@ test('realism: low judging hides hidden attributes; facts are untouched; briefin
   assert.ok(/CA\d+-\d+ (weak|average|decent|good|very good|excellent|world class)/.test(text));
   assert.ok(estimateTokens(text) <= 3000);
 });
+
+// ---------------------------------------------------------------- attributes-only view
+const { fmView } = require('../realism');
+const { ratingAt, dumpGetter } = require('../ratings');
+
+test('attributes-only view: ratings instead of CA, no PA, no hidden attributes', () => {
+  const d = fixture();
+  const v = fmView(d);
+  const text = buildBriefing(v);
+  assert.match(text, /VIEW: like the manager in FM with attribute masking off/);
+  assert.match(text, /## BEST XI BY POSITION RATING: .*\(avg rating \d+\.\d\)/);
+  assert.match(text, /## PROMISING YOUTH/);
+  assert.ok(!/\bCA\d|\bPA\d|CA ~?\d/.test(text), 'no CA/PA numbers may appear');
+  assert.ok(!/inconsistent|big games|injury-prone/.test(text), 'hidden attributes must not leak');
+  const atakan = v.squad.find(p => p.name === 'Atakan Ordu');
+  assert.strictEqual(atakan.caText, ratingAt(dumpGetter(d.squad[0]), 'GK').toFixed(1));
+  assert.strictEqual(d.squad[0].pa, 129, 'original dump must not be modified');
+  assert.ok(estimateTokens(text) <= 3000);
+});

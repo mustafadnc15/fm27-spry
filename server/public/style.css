@@ -68,3 +68,6 @@ dialog textarea, dialog select { padding: 8px; border-radius: 8px; border: 1px s
   .msg { max-width: 100%; }
 }
 .tool-note { align-self: flex-start; font-size: 13px; color: var(--muted); padding: 0 14px; }
+fieldset.vis { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin: 0; }
+fieldset.vis label { margin: 8px 0; }
+#judgingRow.disabled { opacity: .45; }

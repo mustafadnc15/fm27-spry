@@ -42,8 +42,13 @@
   <dialog id="settingsDlg">
     <form method="dialog" id="settingsForm">
       <h2>Director settings</h2>
-      <label class="row"><input type="checkbox" id="realism"> <span><strong>Realism</strong>: he only sees scouting estimates (ranges), not the true numbers</span></label>
-      <label>Judging ability: <strong id="judgingVal">12</strong>/20 <span class="muted">(how good his eye is: wider ranges when lower)</span>
+      <fieldset class="vis">
+        <legend><strong>What can the Director see?</strong></legend>
+        <label class="row"><input type="radio" name="visibility" value="attributes"> <span><strong>What I see in FM</strong>: exact attributes and personality, no CA, PA or hidden attributes (FM with attribute masking off)</span></label>
+        <label class="row"><input type="radio" name="visibility" value="everything"> <span><strong>Everything</strong>: true CA, PA, hidden attributes and attributes, also in search results</span></label>
+        <label class="row"><input type="radio" name="visibility" value="scouted"> <span><strong>Scouted estimates</strong>: ability and attributes as ranges, depending on his judging ability</span></label>
+      </fieldset>
+      <label id="judgingRow">Judging ability: <strong id="judgingVal">12</strong>/20 <span class="muted">(scouted estimates only: wider ranges when lower)</span>
         <input type="range" id="judging" min="1" max="20" step="1">
       </label>
       <label>How hard he thinks

@@ -132,7 +132,8 @@ test('Director app end to end', async t => {
     assert.strictEqual(call.body.output_config.effort, 'medium');
     assert.match(String(call.headers['anthropic-beta']), /server-side-fallback-2026-07-01/);
     assert.match(call.body.system[0].text, /Director of Football at Eskişehirspor/);
-    assert.match(call.body.system[0].text, /Realism mode is OFF/);
+    assert.match(call.body.system[0].text, /exactly what the manager sees in FM with attribute masking off/);
+    assert.match(call.body.system[1].text, /VIEW: like the manager in FM/);
     assert.ok(call.body.system[1].text.includes('<club_briefing>') && call.body.system[1].text.includes('Target Striker'));
     assert.deepStrictEqual(call.body.system[1].cache_control, { type: 'ephemeral' });
     assert.ok(call.headers['x-api-key'] === 'test-key' || call.headers.authorization === 'Bearer test-key');
@@ -153,17 +154,22 @@ test('Director app end to end', async t => {
     assert.ok(second.tools.some(t => t.name === 'search_players' && t.eager_input_streaming === true));
     const toolResult = second.messages[second.messages.length - 1].content[0];
     assert.strictEqual(toolResult.tool_use_id, 'toolu_1');
-    assert.match(toolResult.content, /Our current options there: Main Striker CA 125/);
+    assert.match(toolResult.content, /Our current options there: Main Striker rating \d+\.\d as ST/);
     assert.match(second.system[0].text, /search the whole player database/);
   });
 
   await t.test('realism setting changes what the Director sees', async () => {
-    const saved = JSON.parse((await request(port, 'POST', '/api/settings', { realism: true, judging: 6, effort: 'low' })).text);
-    assert.strictEqual(saved.realism, true);
+    const everything = JSON.parse((await request(port, 'POST', '/api/settings', { visibility: 'everything' })).text);
+    assert.strictEqual(everything.visibility, 'everything');
+    assert.match((await request(port, 'GET', '/api/briefing')).text, /## BEST XI BY CA/);
+    await request(port, 'POST', '/api/chat', { messages: [{ role: 'user', content: 'Verdict?' }] });
+    assert.match(seen[seen.length - 1].body.system[0].text, /You see everything: true current ability/);
+    const saved = JSON.parse((await request(port, 'POST', '/api/settings', { visibility: 'scouted', judging: 6, effort: 'low' })).text);
+    assert.strictEqual(saved.visibility, 'scouted');
     assert.ok((await request(port, 'GET', '/api/briefing')).text.includes('REALISM ON'));
     await request(port, 'POST', '/api/chat', { messages: [{ role: 'user', content: 'Verdict?' }] });
     const call = seen[seen.length - 1];
-    assert.match(call.body.system[0].text, /Realism mode is ON/);
+    assert.match(call.body.system[0].text, /Realism mode: abilities/);
     assert.ok(call.body.system[1].text.includes('REALISM ON'));
     assert.strictEqual(call.body.output_config.effort, 'low');
   });
@@ -189,7 +195,7 @@ test('Director app end to end', async t => {
 
   await t.test('other websites are blocked', async () => {
     assert.strictEqual((await request(port, 'GET', '/api/state', null, { Host: 'evil.example:8766' })).status, 403);
-    assert.strictEqual((await request(port, 'POST', '/api/settings', { realism: false }, { Origin: 'https://evil.example' })).status, 403);
+    assert.strictEqual((await request(port, 'POST', '/api/settings', { visibility: 'everything' }, { Origin: 'https://evil.example' })).status, 403);
     const form = await request(port, 'POST', '/api/chat', null, { 'Content-Type': 'text/plain' });
     assert.strictEqual(form.status, 403);
   });

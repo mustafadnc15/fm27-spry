@@ -179,8 +179,9 @@ himself:
   full report after the next refresh.
 
 While he works you'll see notes like "Searching the player database: ST, starter,
-affordable…". With **Realism** on, he searches and ranks on his scouts' estimates, not the
-true numbers. To switch the export off, set `ExportPlayerDatabase = false` in the plugin
+affordable…". Searches follow the same view setting. In "What I see in FM" they rank by position
+rating and never show CA or PA. In "Everything" they show and filter on true CA and PA. In
+"Scouted estimates" they use his estimates. To switch the export off, set `ExportPlayerDatabase = false` in the plugin
 config.
 
 FM's own shortlists can't be read yet. Saved shortlist files are encrypted, and nobody has
@@ -191,15 +192,19 @@ shortlist" in the chat) is the way to go.
 
 - **Refresh from FM**: asks the plugin for fresh data, the same as pressing F8 in the game.
 - **What he sees**: shows the exact briefing the Director reads.
-- **Settings**:
-  - **Realism**: when on, he only sees scouting **estimates**. CA, PA and attributes become
-    ranges, and the worse his **judging ability** (1–20), the wider the ranges. The true value
-    is always inside the range. Asking again doesn't change the estimate. He knows your own
-    players better than other clubs' players. Hidden attributes and personality only show up
-    with decent judging ability. Contracts, wages, ages and finances are facts and are never
-    blurred.
-  - **How hard he thinks**: low, medium or high (medium is recommended).
-  - **Club philosophy**: the principles he holds you to.
+- **Settings** → **What can the Director see?**
+  - **What I see in FM** (default): exact attributes and personality, but no CA, PA or hidden
+    attributes. That matches FM with attribute masking off. Players are compared by a
+    **position rating** (1–20) that TrueDoF works out from the attributes that matter at each
+    position, e.g. finishing, composure, off the ball and first touch for a striker.
+  - **Everything**: true CA, PA, hidden attributes and attributes, in the briefing and in
+    search results.
+  - **Scouted estimates**: CA, PA and attributes become ranges. The worse his **judging
+    ability** (1–20), the wider the ranges. The true value is always inside the range, and
+    asking again doesn't change the estimate. He knows your own players better than other
+    clubs'. Contracts, wages, ages and finances are never blurred.
+- **Settings** → **How hard he thinks** (low, medium or high) and **Club philosophy** (the
+  principles he holds you to).
 - Your conversation is kept in your browser. **New chat** starts over.
 
 

@@ -29,27 +29,7 @@ function expandPositions(list) {
   return [...out];
 }
 
-// The attributes that define a player's style at each position (used for "players like X").
-const KEY_ATTRS = {
-  GK: ['reflexes', 'handling', 'oneOnOnes', 'commandOfArea', 'aerialReach', 'communication', 'kicking', 'positioning', 'concentration', 'decisions', 'agility'],
-  DC: ['marking', 'tackling', 'heading', 'positioning', 'jumpingReach', 'strength', 'anticipation', 'concentration', 'bravery', 'composure', 'pace'],
-  FB: ['tackling', 'marking', 'crossing', 'pace', 'acceleration', 'stamina', 'workRate', 'positioning', 'dribbling', 'passing', 'teamwork'],
-  DM: ['tackling', 'positioning', 'anticipation', 'passing', 'decisions', 'teamwork', 'workRate', 'composure', 'concentration', 'strength', 'stamina'],
-  MC: ['passing', 'firstTouch', 'technique', 'vision', 'decisions', 'teamwork', 'workRate', 'stamina', 'composure', 'anticipation', 'offTheBall'],
-  W: ['dribbling', 'crossing', 'pace', 'acceleration', 'technique', 'firstTouch', 'flair', 'offTheBall', 'agility', 'passing', 'finishing'],
-  AMC: ['passing', 'vision', 'technique', 'firstTouch', 'flair', 'dribbling', 'decisions', 'composure', 'offTheBall', 'longShots', 'agility'],
-  ST: ['finishing', 'composure', 'offTheBall', 'firstTouch', 'anticipation', 'pace', 'acceleration', 'heading', 'dribbling', 'strength', 'technique'],
-};
-function styleGroup(pos) {
-  if (pos === 'GK') return 'GK';
-  if (pos === 'DC' || pos === 'SW') return 'DC';
-  if (['DL', 'DR', 'WBL', 'WBR'].includes(pos)) return 'FB';
-  if (pos === 'DM') return 'DM';
-  if (pos === 'MC') return 'MC';
-  if (['ML', 'MR', 'AML', 'AMR'].includes(pos)) return 'W';
-  if (pos === 'AMC') return 'AMC';
-  return 'ST';
-}
+const { KEY_ATTRS, styleGroup, ratingAt } = require('../briefing/ratings');
 
 // ---------------------------------------------------------------- helpers
 
@@ -101,19 +81,35 @@ class PlayerDatabase {
 
   // ---- how the Director sees a player (true values, or estimates in realism mode)
 
-  view(r, ctx) {
-    if (!ctx.realism) return { ca: r.ca, pa: r.pa, caText: String(r.ca), paText: String(r.pa), attr: k => r.at[this.attrIndex[k]] || 0, attrText: k => String(r.at[this.attrIndex[k]] || 0) };
+  /**
+   * The Director's view of a player, by mode:
+   *  everything  - true CA/PA and attributes
+   *  attributes  - exact attributes, no CA/PA: ability = position rating 1-20 at `pos` (ca holds rating x 10)
+   *  scouted     - realism estimates (ranges) from his judging ability
+   */
+  view(r, ctx, pos) {
+    const exact = k => r.at[this.attrIndex[k]] || 0;
+    if (ctx.visibility === 'attributes') {
+      const at = pos || this.bestPosition(r);
+      const rating = ratingAt(exact, at);
+      return { ca: Math.round(rating * 10), pa: null, caText: `rating ${rating.toFixed(1)} as ${at}`, paText: null, attr: exact, attrText: k => String(exact(k)) };
+    }
+    if (ctx.visibility !== 'scouted') return { ca: r.ca, pa: r.pa, caText: `CA ${r.ca}`, paText: `PA ${r.pa}`, attr: exact, attrText: k => String(exact(k)) };
     const own = r.c === ctx.ownClub;
     const ab = perceivedAbility(r.id, r.ca, r.pa, ctx.judging, own);
     const cache = {};
-    const pa = k => cache[k] || (cache[k] = perceivedAttr(r.id, k, r.at[this.attrIndex[k]] || 0, ctx.judging, own));
+    const pa = k => cache[k] || (cache[k] = perceivedAttr(r.id, k, exact(k), ctx.judging, own));
     return {
       ca: ab.ca, pa: ab.pa,
-      caText: `${ab.caRange[0]}-${ab.caRange[1]} ${abilityWord(ab.ca)}`, paText: `${ab.paRange[0]}-${ab.paRange[1]}`,
+      caText: `CA ${ab.caRange[0]}-${ab.caRange[1]} ${abilityWord(ab.ca)}`, paText: `PA ${ab.paRange[0]}-${ab.paRange[1]}`,
       attr: k => pa(k).value,
       attrText: k => { const a = pa(k); return a.range[0] === a.range[1] ? String(a.value) : `${a.range[0]}-${a.range[1]}`; },
     };
   }
+
+  /** Can the Director see hidden attributes / personality in this mode? */
+  seesHidden(ctx, own) { return ctx.visibility === 'everything' || (ctx.visibility === 'scouted' && ctx.judging >= (own ? 10 : 14)); }
+  seesPersonality(ctx, own) { return ctx.visibility !== 'scouted' || ctx.judging >= (own ? 5 : 8); }
 
   fee(r) { return !r.c ? 0 : (r.ask ?? r.v ?? null); }
 
@@ -131,14 +127,13 @@ class PlayerDatabase {
       .map(([k]) => `${k.replace(/([A-Z])/g, ' $1').toLowerCase()} ${v.attrText(k)}`).join(', ');
   }
 
-  line(r, ctx, extra = '') {
-    const v = this.view(r, ctx);
+  line(r, ctx, extra = '', v = this.view(r, ctx)) {
     const fee = this.fee(r);
     const m = monthsBetween(ctx.today, r.x);
     const bits = [
       `${r.n} (${r.a ?? '?'}, ${r.pos}${r.acc ? ', also ' + r.acc : ''})`,
       `${r.c || 'FREE AGENT'}${r.la ? ` (on loan at ${r.la})` : ''}${r.lg ? ` [${r.lg}]` : ''}`,
-      `CA ${v.caText}, PA ${v.paText}`,
+      v.paText ? `${v.caText}, ${v.paText}` : v.caText,
       r.c ? `value ${money(r.v)}${r.ask != null ? `, asking ${money(r.ask)}` : ''}` : 'no fee (free agent)',
       `wage ${money(r.w)}/w${r.x ? `, contract to ${r.x}` : ''}${m != null && m <= 6 && r.c ? ' (≤6 months left: pre-contract possible)' : ''}`,
     ];
@@ -154,7 +149,7 @@ class PlayerDatabase {
 
   ourOptions(positions, ctx) {
     return this.rows.filter(r => r.c === ctx.ownClub && !r.la && this.plays(r, positions))
-      .map(r => ({ r, ca: this.view(r, ctx).ca })).sort((a, b) => b.ca - a.ca);
+      .map(r => ({ r, v: this.view(r, ctx, positions[0]) })).map(o => ({ ...o, ca: o.v.ca })).sort((a, b) => b.ca - a.ca);
   }
 
   // ---------------------------------------------------------------- tools
@@ -163,19 +158,25 @@ class PlayerDatabase {
     const positions = expandPositions(input.positions);
     const role = ['starter', 'backup'].includes(input.role) ? input.role : null;
     let minCa = num(input.min_ca, 1, 200), maxCa = num(input.max_ca, 1, 200);
-    const minPa = num(input.min_pa, 1, 200), minAge = num(input.min_age, 14, 45), maxAge = num(input.max_age, 14, 45);
+    const minPa = ctx.visibility === 'attributes' ? null : num(input.min_pa, 1, 200), minAge = num(input.min_age, 14, 45), maxAge = num(input.max_age, 14, 45);
     let maxFee = num(input.max_fee, 0, 2e9), maxWage = num(input.max_wage, 0, 1e8);
     const expiring = num(input.contract_expiring_within_months, 0, 60);
     const limit = num(input.limit, 1, 25) || 10;
     const league = str(input.league) && norm(input.league), nation = str(input.nationality) && norm(input.nationality);
     const excludeOwn = input.exclude_own_club !== false;
     const notes = [];
+    const attrsOnly = ctx.visibility === 'attributes';
+    if (attrsOnly) {
+      if (minCa != null || maxCa != null || input.min_pa != null) notes.push('CA/PA filters ignored: CA and PA are not visible in this mode (use min_rating instead).');
+      minCa = num(input.min_rating, 1, 20) != null ? num(input.min_rating, 1, 20) * 10 : null;
+      maxCa = num(input.max_rating, 1, 20) != null ? num(input.max_rating, 1, 20) * 10 : null;
+    }
 
     if (role && positions.length) {
       const ours = this.ourOptions(positions, ctx);
       const starter = ours[0], backup = ours[1];
       if (starter) {
-        notes.push(`Our current options there: ${ours.slice(0, 3).map(o => `${o.r.n} CA ${this.view(o.r, ctx).caText}`).join(', ')}.`);
+        notes.push(`Our current options there: ${ours.slice(0, 3).map(o => `${o.r.n} ${o.v.caText}`).join(', ')}.`);
         if (role === 'starter') minCa = Math.max(minCa ?? 0, starter.ca - 3);
         else { minCa = Math.max(minCa ?? 0, (backup ? backup.ca : starter.ca - 15) - 10); maxCa = Math.min(maxCa ?? 200, starter.ca + 2); }
       } else notes.push('We have nobody accomplished at that position, so any decent player is an upgrade.');
@@ -206,21 +207,22 @@ class PlayerDatabase {
         if (!cheapRoute && (fee == null || fee > maxFee)) continue;
       }
       if (maxWage != null && r.w != null && r.w > maxWage) continue;
-      const v = this.view(r, ctx);
+      const v = this.view(r, ctx, positions[0]);
       if (minCa != null && v.ca < minCa) continue;
       if (maxCa != null && v.ca > maxCa) continue;
       if (minPa != null && v.pa < minPa) continue;
       found.push({ r, v });
     }
 
-    const sort = input.sort_by;
+    let sort = input.sort_by;
+    if (attrsOnly && (sort === 'pa' || sort === 'potential')) { notes.push('Potential is not visible in this mode, so sorted by rating instead.'); sort = 'ca'; }
     const key = sort === 'pa' ? x => x.v.pa : sort === 'potential' ? x => x.v.pa - x.v.ca
       : sort === 'value' ? x => -(this.fee(x.r) ?? 1e12) : sort === 'age' ? x => -(x.r.a ?? 99) : x => x.v.ca;
     found.sort((a, b) => key(b) - key(a));
 
-    const head = [`Found ${found.length} player(s)${found.length > limit ? `, showing the top ${limit}` : ''}, sorted by ${sort || 'ca'}.` +
-      `${positions.length ? ` Positions: ${positions.join('/')}.` : ''}${minCa != null || maxCa != null ? ` CA window: ${minCa ?? 1}-${maxCa ?? 200}${ctx.realism ? ' (on our scouts\' estimates)' : ''}.` : ''}`];
-    return [...head, ...notes, ...found.slice(0, limit).map((x, i) => `${i + 1}. ${this.line(x.r, ctx)}`)].join('\n');
+    const head = [`Found ${found.length} player(s)${found.length > limit ? `, showing the top ${limit}` : ''}, sorted by ${(sort || 'ca') === 'ca' && attrsOnly ? 'position rating' : sort || 'ca'}.` +
+      `${positions.length ? ` Positions: ${positions.join('/')}.` : ''}${minCa != null || maxCa != null ? (attrsOnly ? ` Rating window: ${((minCa ?? 10) / 10).toFixed(1)}-${((maxCa ?? 200) / 10).toFixed(1)}.` : ` CA window: ${minCa ?? 1}-${maxCa ?? 200}${ctx.visibility === 'scouted' ? ' (on our scouts\' estimates)' : ''}.`) : ''}`];
+    return [...head, ...notes, ...found.slice(0, limit).map((x, i) => `${i + 1}. ${this.line(x.r, ctx, '', x.v)}`)].join('\n');
   }
 
   findPlayer(query) {
@@ -239,7 +241,7 @@ class PlayerDatabase {
     if (!target) return `No player called "${input.player}" in the database. Check the spelling, or he may play in a league that isn't loaded in this save.`;
     const positions = expandPositions(input.positions).length ? expandPositions(input.positions) : [this.bestPosition(target)];
     const keys = KEY_ATTRS[styleGroup(positions[0])];
-    const tv = this.view(target, ctx);
+    const tv = this.view(target, ctx, positions[0]);
     const vec = v => { const xs = keys.map(k => v.attr(k)); const mean = xs.reduce((a, b) => a + b, 0) / xs.length; return xs.map(x => x - mean); };
     const t = vec(tv), tNorm = Math.hypot(...t) || 1;
     const maxFee = bool(input.affordable_only) && ctx.transferBudget != null ? ctx.transferBudget : num(input.max_fee, 0, 2e9);
@@ -256,16 +258,16 @@ class PlayerDatabase {
         const m = monthsBetween(ctx.today, r.x), fee = this.fee(r);
         if (!(!r.c || (m != null && m <= 6)) && (fee == null || fee > maxFee)) continue;
       }
-      const v = this.view(r, ctx);
+      const v = this.view(r, ctx, positions[0]);
       const x = vec(v), xNorm = Math.hypot(...x) || 1;
       const shape = (t.reduce((s, ti, i) => s + ti * x[i], 0) / (tNorm * xNorm) + 1) / 2;
       const level = Math.max(0, 1 - Math.abs(v.ca - tv.ca) / 40);
-      scored.push({ r, score: 0.7 * shape + 0.3 * level });
+      scored.push({ r, v, score: 0.7 * shape + 0.3 * level });
     }
     scored.sort((a, b) => b.score - a.score);
-    const head = `Players most like ${target.n} (${target.c || 'free agent'}, CA ${tv.caText}) at ${positions.join('/')}, compared on ${keys.join(', ')}:` +
+    const head = `Players most like ${target.n} (${target.c || 'free agent'}, ${tv.caText}) at ${positions.join('/')}, compared on ${keys.join(', ')}:` +
       (others.length ? `\n(Other players with that name: ${others.map(o => `${o.n} of ${o.c || 'no club'}, id ${o.id}`).join('; ')}. Use an id to pick one.)` : '');
-    return [head, ...scored.slice(0, limit).map((x, i) => `${i + 1}. ${this.line(x.r, ctx, ` | similarity ${Math.round(x.score * 100)}%`)}`)].join('\n');
+    return [head, ...scored.slice(0, limit).map((x, i) => `${i + 1}. ${this.line(x.r, ctx, ` | similarity ${Math.round(x.score * 100)}%`, x.v)}`)].join('\n');
   }
 
   profile(input, ctx) {
@@ -277,11 +279,15 @@ class PlayerDatabase {
     this.meta.attrKeys.forEach((k, i) => { (groups[this.meta.attrGroups[i]] ||= []).push(`${k} ${v.attrText(k)}`); });
     const gk = this.bestPosition(r) === 'GK';
     const out = [this.line(r, ctx)];
+    if (ctx.visibility === 'attributes') {
+      const spots = POS_KEYS.filter((p, i) => r.pr[i] >= 15);
+      out.push(`Position ratings (TrueDoF, from attributes): ${spots.map(p => `${p} ${ratingAt(k => r.at[this.attrIndex[k]] || 0, p).toFixed(1)}`).join(', ')}`);
+    }
     out.push(`Positions (1-20): ${POS_KEYS.map((p, i) => [p, r.pr[i]]).filter(x => x[1] >= 10).map(x => `${x[0]} ${x[1]}`).join(', ')}`);
     for (const g of ['technical', 'mental', 'physical', ...(gk ? ['goalkeeping'] : [])]) out.push(`${g}: ${groups[g].join(', ')}`);
-    if (!ctx.realism || ctx.judging >= (own ? 10 : 14)) out.push(`hidden: ${this.hiddenKeys.map((k, i) => `${k} ${r.hd[i]}`).join(', ')}${ctx.realism ? ' (estimates)' : ''}`);
-    else out.push('hidden attributes: unknown (our judging ability is too low to read them)');
-    if (!ctx.realism || ctx.judging >= (own ? 5 : 8)) out.push(`personality: ${this.persKeys.map((k, i) => `${k} ${r.ps[i]}`).join(', ')}`);
+    if (this.seesHidden(ctx, own)) out.push(`hidden: ${this.hiddenKeys.map((k, i) => `${k} ${r.hd[i]}`).join(', ')}`);
+    else out.push(ctx.visibility === 'attributes' ? 'hidden attributes: not visible (same as in the game)' : 'hidden attributes: unknown (our judging ability is too low to read them)');
+    if (this.seesPersonality(ctx, own)) out.push(`personality: ${this.persKeys.map((k, i) => `${k} ${r.ps[i]}`).join(', ')}`);
     else out.push('personality: unknown');
     out.push(`Other facts: nationality ${r.nat || '?'}, height ${r.h || '?'} cm, foot ${r.ft || '?'}, reputation ${r.rep ?? '?'}${r.mo ? `, morale ${r.mo}/20` : ''}`);
     if (others.length) out.push(`(Other players with that name: ${others.map(o => `${o.n} of ${o.c || 'no club'} (id ${o.id})`).join('; ')})`);

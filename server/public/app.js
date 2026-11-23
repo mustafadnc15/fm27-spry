@@ -56,7 +56,7 @@ async function refreshState() {
     const s = await (await fetch('/api/state')).json();
     const d = s.dump;
     $('clubline').textContent = d
-      ? `${d.club || '?'} · ${d.league || ''} · game date ${d.gameDate || '?'} · data from ${String(d.generatedAt || '').replace('T', ' ')} · ${s.settings.realism ? `realism ON (judging ${s.settings.judging}/20)` : 'true numbers'}`
+      ? `${d.club || '?'} · ${d.league || ''} · game date ${d.gameDate || '?'} · data from ${String(d.generatedAt || '').replace('T', ' ')} · ${viewLabel(s.settings)}`
       : 'No game data yet: load your save in FM27 and press F8.';
     const warn = [];
     if (!s.hasKey) warn.push('No Anthropic API key found. Copy .env.example to .env, put your key in it, and restart the app.');
@@ -135,24 +135,34 @@ $('refreshBtn').addEventListener('click', async () => {
 $('briefingBtn').addEventListener('click', async () => {
   const [text, s] = await Promise.all([fetch('/api/briefing').then(r => r.text()), refreshState()]);
   $('briefingText').textContent = text;
-  $('briefingMeta').textContent = s ? `About ${s.briefingTokens} tokens, sent with every question${s.settings.realism ? `; realism ON, judging ${s.settings.judging}/20` : ''}.` : '';
+  $('briefingMeta').textContent = s ? `About ${s.briefingTokens} tokens, sent with every question; view: ${viewLabel(s.settings)}.` : '';
   $('briefingDlg').showModal();
 });
 
 $('settingsBtn').addEventListener('click', async () => {
   const s = await refreshState(); if (!s) return;
-  $('realism').checked = s.settings.realism;
+  document.querySelectorAll('input[name=visibility]').forEach(r => { r.checked = r.value === s.settings.visibility; });
+  syncJudging();
   $('judging').value = s.settings.judging; $('judgingVal').textContent = s.settings.judging;
   $('effort').value = s.settings.effort;
   $('philosophy').value = s.settings.philosophy;
   $('settingsDlg').showModal();
 });
+function viewLabel(s) {
+  return s.visibility === 'everything' ? 'sees everything (CA/PA)' : s.visibility === 'scouted' ? `scouted estimates (judging ${s.judging}/20)` : 'sees what you see in FM';
+}
+function syncJudging() {
+  const scouted = (document.querySelector('input[name=visibility]:checked') || {}).value === 'scouted';
+  $('judgingRow').classList.toggle('disabled', !scouted);
+  $('judging').disabled = !scouted;
+}
+document.querySelectorAll('input[name=visibility]').forEach(r => r.addEventListener('change', syncJudging));
 $('judging').addEventListener('input', () => { $('judgingVal').textContent = $('judging').value; });
 $('settingsDlg').addEventListener('close', async () => {
   if ($('settingsDlg').returnValue !== 'save') return;
   await fetch('/api/settings', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ realism: $('realism').checked, judging: Number($('judging').value), effort: $('effort').value, philosophy: $('philosophy').value }),
+    body: JSON.stringify({ visibility: (document.querySelector('input[name=visibility]:checked') || {}).value, judging: Number($('judging').value), effort: $('effort').value, philosophy: $('philosophy').value }),
   });
   refreshState();
 });

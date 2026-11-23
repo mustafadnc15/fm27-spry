@@ -9,14 +9,14 @@ const { PlayerDatabase, expandPositions } = require('../database');
 const { runTool, validate } = require('../tools');
 const { dbFixture } = require('./dbfixture');
 
-function setup(realism = false, judging = 12) {
+function setup(visibility = 'everything', judging = 12) {
   const { dump, db } = dbFixture();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'truedof-db-'));
   fs.writeFileSync(path.join(dir, 'players-db.json'), JSON.stringify(db));
   const database = new PlayerDatabase(path.join(dir, 'players-db.json'));
   const ctx = {
     ownClub: dump.club.name, today: dump.meta.gameDate, transferBudget: 2_000_000, wageHeadroom: 3000, topWage: 7000,
-    realism, judging, dataDir: dir,
+    visibility, judging, dataDir: dir,
   };
   return { database, ctx, dir, db };
 }
@@ -86,7 +86,7 @@ test('profile shows everything; unknown names are explained', () => {
 });
 
 test('realism: ranges instead of numbers, hidden attributes unknown at low judging', () => {
-  const { database, ctx } = setup(true, 4);
+  const { database, ctx } = setup('scouted', 4);
   const s = runTool(database, 'search_players', { positions: ['ST'], limit: 5 }, ctx).text;
   lines(s).forEach(l => assert.match(l, /CA \d+-\d+ (weak|average|decent|good|very good|excellent|world class)/));
   const p = runTool(database, 'get_player_profile', { player: 'Other Player 8' }, ctx).text;
@@ -111,4 +111,23 @@ test('bad tool input is refused, missing database is explained', () => {
   const r = runTool(missing, 'search_players', {}, {});
   assert.strictEqual(r.isError, true);
   assert.match(r.text, /press F8/);
+});
+
+test('attributes-only view: no CA/PA anywhere, ranked by position rating, hidden attributes hidden', () => {
+  const { database, ctx } = setup('attributes');
+  const s = runTool(database, 'search_players', { positions: ['ST'], role: 'starter', min_ca: 150, limit: 5 }, ctx).text;
+  assert.match(s, /CA\/PA filters ignored/);
+  assert.match(s, /Our current options there: Main Striker rating \d+\.\d as ST/);
+  assert.match(s, /sorted by position rating/);
+  assert.ok(!/\bCA \d|\bPA \d/.test(s), 'no CA/PA numbers may appear');
+  const ratings = lines(s).map(l => Number(l.match(/rating (\d+\.\d)/)[1]));
+  assert.ok(ratings.length > 0);
+  assert.deepStrictEqual(ratings, [...ratings].sort((a, b) => b - a));
+  const r = runTool(database, 'search_players', { positions: ['DC'], min_rating: 14, limit: 25 }, ctx).text;
+  lines(r).forEach(l => assert.ok(Number(l.match(/rating (\d+\.\d)/)[1]) >= 14, l));
+  const p = runTool(database, 'get_player_profile', { player: 'Emirhan Topçu' }, ctx).text;
+  assert.match(p, /hidden attributes: not visible \(same as in the game\)/);
+  assert.match(p, /personality: /);
+  assert.match(p, /Position ratings \(TrueDoF, from attributes\): DC \d+\.\d/);
+  assert.ok(!/\bCA \d|\bPA \d/.test(p));
 });

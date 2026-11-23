@@ -21,9 +21,11 @@ const TOOLS = [
       properties: {
         positions: { type: 'array', items: { type: 'string' }, description: POSITION_HELP },
         role: { type: 'string', enum: ['starter', 'backup'], description: 'Set the ability window relative to our own players at these positions.' },
-        min_ca: { type: 'integer', description: 'Minimum current ability (1-200).' },
-        max_ca: { type: 'integer', description: 'Maximum current ability (1-200).' },
-        min_pa: { type: 'integer', description: 'Minimum potential ability (1-200).' },
+        min_ca: { type: 'integer', description: 'Minimum current ability (1-200). Only when you can see CA.' },
+        max_ca: { type: 'integer', description: 'Maximum current ability (1-200). Only when you can see CA.' },
+        min_pa: { type: 'integer', description: 'Minimum potential ability (1-200). Only when you can see PA.' },
+        min_rating: { type: 'number', description: 'Minimum position rating (1-20). Use this in the attributes-only view, where CA/PA are hidden.' },
+        max_rating: { type: 'number', description: 'Maximum position rating (1-20), attributes-only view.' },
         min_age: { type: 'integer' },
         max_age: { type: 'integer' },
         max_fee: { type: 'integer', description: 'Most we would pay, in pounds (asking price, else value).' },
@@ -98,7 +100,7 @@ function validate(name, input) {
   for (const [k, v] of Object.entries(input)) {
     const p = schema.properties[k];
     if (!p) return `Unknown field "${k}".`;
-    if (p.type === 'integer' && !(typeof v === 'number' && Number.isFinite(v))) return `"${k}" must be a number.`;
+    if ((p.type === 'integer' || p.type === 'number') && !(typeof v === 'number' && Number.isFinite(v))) return `"${k}" must be a number.`;
     if (p.type === 'boolean' && typeof v !== 'boolean') return `"${k}" must be true or false.`;
     if (p.type === 'string' && typeof v !== 'string') return `"${k}" must be text.`;
     if (p.type === 'array' && !(Array.isArray(v) && v.every(x => typeof x === 'string'))) return `"${k}" must be a list of text.`;

@@ -14,7 +14,7 @@ const path = require('path');
 const os = require('os');
 const Anthropic = require('@anthropic-ai/sdk');
 const { buildBriefing, estimateTokens } = require('../briefing/briefing');
-const { perceive } = require('../briefing/realism');
+const { perceive, fmView } = require('../briefing/realism');
 const { systemPrompt, DEFAULT_PHILOSOPHY } = require('./director');
 const { PlayerDatabase } = require('./database');
 const { TOOLS, runTool, describe } = require('./tools');
@@ -50,16 +50,26 @@ function loadEnv(file) {
   }
 }
 
-const DEFAULT_SETTINGS = { realism: false, judging: 12, effort: 'medium', philosophy: DEFAULT_PHILOSOPHY };
+// visibility: what the Director can see.
+//   'attributes' - like the manager in FM with attribute masking off: exact attributes, no CA/PA/hidden
+//   'everything' - true CA, PA, hidden attributes and attributes
+//   'scouted'    - scouting estimates (ranges) based on his judging ability
+const VISIBILITY = ['attributes', 'everything', 'scouted'];
+const DEFAULT_SETTINGS = { visibility: 'attributes', judging: 12, effort: 'medium', philosophy: DEFAULT_PHILOSOPHY };
 
 function readSettings() {
-  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; }
-  catch { return { ...DEFAULT_SETTINGS }; }
+  let s;
+  try { s = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) }; }
+  catch { s = { ...DEFAULT_SETTINGS }; }
+  if (typeof s.realism === 'boolean' && !VISIBILITY.includes(s.visibility)) s.visibility = s.realism ? 'scouted' : 'everything';   // older settings file
+  if (!VISIBILITY.includes(s.visibility)) s.visibility = DEFAULT_SETTINGS.visibility;
+  delete s.realism;
+  return s;
 }
 
 function saveSettings(input) {
   const s = readSettings();
-  if (typeof input.realism === 'boolean') s.realism = input.realism;
+  if (VISIBILITY.includes(input.visibility)) s.visibility = input.visibility;
   if (Number.isFinite(Number(input.judging))) s.judging = Math.max(1, Math.min(20, Math.round(Number(input.judging))));
   if (['low', 'medium', 'high'].includes(input.effort)) s.effort = input.effort;
   if (typeof input.philosophy === 'string') s.philosophy = input.philosophy.slice(0, 2000);
@@ -78,7 +88,8 @@ function readDump() { return readJson(path.join(DATA_DIR, 'dump-latest.json')); 
 function currentBriefing(settings) {
   const dump = readDump();
   if (!dump) return { dump: null, text: null };
-  const seen = settings.realism ? perceive(dump, settings.judging) : dump;
+  const seen = settings.visibility === 'scouted' ? perceive(dump, settings.judging)
+    : settings.visibility === 'attributes' ? fmView(dump) : dump;
   return { dump, text: buildBriefing(seen) };
 }
 
@@ -151,7 +162,7 @@ function toolContext(dump, settings) {
     transferBudget: club.transferBudget ?? null,
     wageHeadroom: club.wageBudgetWeekly != null && club.wageSpendWeekly != null ? club.wageBudgetWeekly - club.wageSpendWeekly : null,
     topWage: wages.length ? Math.max(...wages) : null,
-    realism: settings.realism, judging: settings.judging, dataDir: DATA_DIR,
+    visibility: settings.visibility, judging: settings.judging, dataDir: DATA_DIR,
   };
 }
 
@@ -172,7 +183,7 @@ async function chat(req, res) {
 
   const ctx = toolContext(dump, settings);
   const system = [
-    { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, realism: settings.realism, databaseReady: database.load() }) },
+    { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, visibility: settings.visibility, databaseReady: database.load() }) },
     { type: 'text', text: `<club_briefing>\n${briefing}\n</club_briefing>`, cache_control: { type: 'ephemeral' } },
   ];
   const messages = [...history];   // grows with tool calls and results during this answer

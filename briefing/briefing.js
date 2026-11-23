@@ -1,4 +1,5 @@
 'use strict';
+const { KEY_ATTRS, styleGroup, dumpGetter, bestPosition } = require('./ratings');
 // TrueDoF briefing builder.
 // Turns dump-latest.json into a compact text briefing (< ~3,000 tokens) for the AI Director.
 // All football maths happens HERE, in plain code, so the AI receives facts it can't miscount.
@@ -91,7 +92,7 @@ function money(n) {
 }
 
 const SHORT = {
-  longShots: 'LSh', longThrows: 'LTh', commandOfArea: 'Cmd', communication: 'Cmm', oneOnOnes: '1v1',
+  longShots: 'LSh', longThrows: 'LTh', commandOfArea: 'Cmd', communication: 'Cmm', oneOnOnes: 'OnO',
   firstTouch: 'Fir', freeKicks: 'Fre', offTheBall: 'OtB', penaltyTaking: 'Pen', workRate: 'Wor',
   jumpingReach: 'Jum', naturalFitness: 'NFi', aerialReach: 'Aer', rushingOut: 'Rus',
 };
@@ -99,19 +100,23 @@ const short = k => SHORT[k] || (k[0].toUpperCase() + k.slice(1, 3));
 
 function isGK(p) { return (p.naturalPositions || []).includes('GK'); }
 
-// Top N attributes (GKs: their keeping attributes count too).
+// Top N attributes among the ones that matter at his best position (see ratings.js).
 function topAttrs(p, n = 3) {
-  const all = { ...p.technical, ...p.mental, ...p.physical, ...(isGK(p) ? p.goalkeeping : {}) };
+  const get = dumpGetter(p);
   const r = p.attrRanges || {};
-  return Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, n)
+  return KEY_ATTRS[styleGroup(bestPosition(p))].map(k => [k, get(k)]).filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1]).slice(0, n)
     .map(([k, v]) => r[k] && r[k][0] !== r[k][1] ? `${short(k)}${r[k][0]}-${r[k][1]}` : `${short(k)}${v}`).join(' ');
 }
 
 function pos(p) { return (p.naturalPositions || []).join('/') || '?'; }
 
 // CA / PA as shown: exact number, or "115-135 good" when realism blurred it.
-function CA(p) { return p.caRange ? `${p.caRange[0]}-${p.caRange[1]}${p.caWord ? ` ${p.caWord}` : ''}` : String(p.ca); }
+function CA(p) { return p.caText ? p.caText : p.caRange ? `${p.caRange[0]}-${p.caRange[1]}${p.caWord ? ` ${p.caWord}` : ''}` : String(p.ca); }
 function PA(p) { return p.paRange ? `${p.paRange[0]}-${p.paRange[1]}` : String(p.pa); }
+// "CA138" normally, "rating 13.8" in attributes-only mode; potential part is empty when PA is hidden.
+function AB(p) { return p.caText ? `rating ${p.caText}` : `CA${CA(p)}`; }
+function POT(p) { return p.paHidden ? '' : ` PA${PA(p)}`; }
 
 function monthsBetween(fromIso, toIso) {
   if (!fromIso || !toIso) return null;
@@ -170,6 +175,8 @@ function buildBriefing(dump, opts = {}) {
   const maxTokens = opts.maxTokens || 3000;
   const meta = dump.meta || {}, club = dump.club || {};
   const realism = meta.realism || null;   // set by realism.perceive(): numbers are estimates
+  const attrsOnly = meta.visibility === 'attributes';   // set by realism.fmView(): no CA/PA, position ratings instead
+  const diff = d => attrsOnly ? (d / 10).toFixed(1) : String(Math.round(d));
   const today = meta.gameDate || (meta.generatedAt || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
 
   const all = (dump.squad || []).map(p => ({ ...p, ca: p.ca || 0, pa: p.pa || 0 }));
@@ -188,6 +195,9 @@ function buildBriefing(dump, opts = {}) {
 
   // ---- header
   line(`=== TRUEDOF BRIEFING: ${club.name || '?'} (${club.league || 'league ?'}) ===`);
+  if (attrsOnly)
+    line('VIEW: like the manager in FM with attribute masking off. Exact attributes and personality; NO CA, PA or hidden attributes. ' +
+      '"rating" = position rating 1-20 from the key attributes of his best position (computed by TrueDoF).');
   if (realism)
     line(`REALISM ON: the Director's judging ability is ${realism.judging}/20. CA, PA and attributes are scouting ESTIMATES shown as ranges ` +
       `(the true value is inside the range). Hidden attributes: ${realism.hiddenKnown}. Personality: ${realism.personalityKnown}.`);
@@ -214,11 +224,11 @@ function buildBriefing(dump, opts = {}) {
 
   // ---- best XI
   line('');
-  line(`## BEST XI BY CA: ${xi.formation} (avg CA ${(realism ? '~' : '') + xiAvg})`);
+  line(`## BEST XI BY ${attrsOnly ? 'POSITION RATING' : 'CA'}: ${xi.formation} (avg ${attrsOnly ? 'rating ' + (xiAvg / 10).toFixed(1) : 'CA ' + (realism ? '~' : '') + xiAvg})`);
   for (const s of xi.slots) {
     if (!s.p) { line(`${s.slot}: NOBODY`); continue; }
     const p = s.p;
-    line(`${s.slot.padEnd(3)} ${p.name} ${p.age ?? '?'}y CA${CA(p)} PA${PA(p)} ${topAttrs(p)}${s.outOfPosition ? ' (OUT OF POSITION)' : ''}`);
+    line(`${s.slot.padEnd(3)} ${p.name} ${p.age ?? '?'}y ${AB(p)}${POT(p)} ${topAttrs(p)}${s.outOfPosition ? ' (OUT OF POSITION)' : ''}`);
   }
 
   // ---- depth
@@ -240,7 +250,7 @@ function buildBriefing(dump, opts = {}) {
   for (const s of xi.slots) {
     if (!s.p) { weak.push(`${s.slot}: no player at all`); continue; }
     if (s.outOfPosition) weak.push(`${s.slot}: ${s.p.name} plays out of position`);
-    if (s.p.ca <= xiAvg - 10) weak.push(`${s.slot}: ${s.p.name} CA ${CA(s.p)} is ${xiAvg - s.p.ca} below XI average`);
+    if (s.p.ca <= xiAvg - 10) weak.push(`${s.slot}: ${s.p.name} ${AB(s.p)} is ${diff(xiAvg - s.p.ca)} below XI average`);
     if ((s.p.age || 0) >= 32) weak.push(`${s.slot}: ${s.p.name} is ${s.p.age}, decline coming`);
     const f = flags(s.p).filter(x => /inconsistent|big games|injury-prone|professionalism|hot-headed/.test(x));
     if (f.length) weak.push(`${s.slot}: ${s.p.name}: ${f.join(', ')}`);
@@ -265,7 +275,7 @@ function buildBriefing(dump, opts = {}) {
     .filter(x => x.m != null && x.m <= 12).sort((a, b) => a.m - b.m);
   const expiryTag = m => m < 0 ? ' [end date already passed?]' : m <= 6 ? ' [≤6 months: can agree a pre-contract with a foreign club]' : '';
   if (!expiring.length) line('none');
-  expiring.forEach(({ p, m }) => line(`${p.name} ${p.age ?? '?'}y ${pos(p)} CA${CA(p)} PA${PA(p)} ${money(p.contract.wageWeekly)}/w ends ${p.contract.expires}` +
+  expiring.forEach(({ p, m }) => line(`${p.name} ${p.age ?? '?'}y ${pos(p)} ${AB(p)}${POT(p)} ${money(p.contract.wageWeekly)}/w ends ${p.contract.expires}` +
     `${xiIds.has(p.uid) ? ' [XI]' : ''}${expiryTag(m)}`));
 
   // ---- wages
@@ -275,10 +285,10 @@ function buildBriefing(dump, opts = {}) {
   const medWage = median(wages.map(p => p.contract.wageWeekly));
   const top = [...wages].sort((a, b) => b.contract.wageWeekly - a.contract.wageWeekly);
   line(`Median player wage ${money(medWage)}/w. Top earners: ` +
-    top.slice(0, 5).map(p => `${p.name} ${money(p.contract.wageWeekly)} (CA${CA(p)}${xiIds.has(p.uid) ? ', XI' : ''})`).join('; '));
+    top.slice(0, 5).map(p => `${p.name} ${money(p.contract.wageWeekly)} (${AB(p)}${xiIds.has(p.uid) ? ', XI' : ''})`).join('; '));
   const p75 = top.length ? top[Math.floor(top.length * 0.25)].contract.wageWeekly : null;
   const poorValue = top.filter(p => p75 != null && p.contract.wageWeekly >= p75 && !xiIds.has(p.uid) && (p.age || 0) > 21).slice(0, 5);
-  if (poorValue.length) line('High earners outside the XI: ' + poorValue.map(p => `${p.name} ${money(p.contract.wageWeekly)}/w CA${CA(p)}`).join('; '));
+  if (poorValue.length) line('High earners outside the XI: ' + poorValue.map(p => `${p.name} ${money(p.contract.wageWeekly)}/w ${AB(p)}`).join('; '));
 
   // ---- morale
   const unhappy = pool.filter(p => p.morale != null && p.morale <= 9).sort((a, b) => a.morale - b.morale).slice(0, 6);
@@ -291,13 +301,16 @@ function buildBriefing(dump, opts = {}) {
 
   // ---- youth
   line('');
-  line('## HIGH-POTENTIAL YOUTH (age ≤ 21)');
-  const youth = all.filter(p => (p.age || 99) <= 21 && p.pa >= xiAvg - 5 && (p.pa >= xiAvg + 5 || p.pa - p.ca >= 25))
-    .sort((a, b) => b.pa - a.pa).slice(0, 8);
+  line(attrsOnly ? '## PROMISING YOUTH (age ≤ 21)' : '## HIGH-POTENTIAL YOUTH (age ≤ 21)');
+  const youth = attrsOnly
+    ? all.filter(p => (p.age || 99) <= 21 && p.ca >= xiAvg - 25).sort((a, b) => (b.ca + (21 - b.age) * 5) - (a.ca + (21 - a.age) * 5)).slice(0, 8)
+    : all.filter(p => (p.age || 99) <= 21 && p.pa >= xiAvg - 5 && (p.pa >= xiAvg + 5 || p.pa - p.ca >= 25))
+      .sort((a, b) => b.pa - a.pa).slice(0, 8);
+  if (attrsOnly) line('(Potential is not visible in this view: these are the young players whose attributes are already closest to first-team level.)');
   if (!youth.length) line('none above first-team level');
   youth.forEach(p => {
     const f = flags(p).filter(x => /professionalism|determination|ambitious|pro /.test(x));
-    line(`${p.name} ${p.age}y ${pos(p)} CA${CA(p)} → PA${PA(p)} (${p.team || 'loaned out'})${f.length ? ' | ' + f.join(', ') : ''}`);
+    line(`${p.name} ${p.age}y ${pos(p)} ${AB(p)}${p.paHidden ? '' : ` → PA${PA(p)}`} (${p.team || 'loaned out'})${f.length ? ' | ' + f.join(', ') : ''}`);
   });
 
   // ---- shortlist
@@ -329,9 +342,9 @@ function buildBriefing(dump, opts = {}) {
     const wageVsTop = wage != null && top.length ? `${Math.round(100 * wage / top[0].contract.wageWeekly)}% of our top earner` : '';
 
     const owner = p.onLoanAt ? `${p.club || '?'}, on loan at ${p.onLoanAt}${p.loanEnds ? ` until ${p.loanEnds}` : ''}` : (p.club || '?');
-    line(`* ${p.name} ${p.age ?? '?'}y ${pos(p)} (${owner}) CA${CA(p)} PA${PA(p)} ${ageStage(p.age)} | ${topAttrs(p)}`);
+    line(`* ${p.name} ${p.age ?? '?'}y ${pos(p)} (${owner}) ${AB(p)}${POT(p)} ${ageStage(p.age)} | ${topAttrs(p)}`);
     const upgrade = bestSlot
-      ? (bestSlot.s.p ? `vs our ${bestSlot.s.slot} ${bestSlot.s.p.name} CA${CA(bestSlot.s.p)}: ${bestSlot.gain >= 5 ? 'UPGRADE' : bestSlot.gain >= -5 ? 'similar level' : 'NOT an upgrade'} (${bestSlot.gain >= 0 ? '+' : ''}${Math.round(bestSlot.gain)})`
+      ? (bestSlot.s.p ? `vs our ${bestSlot.s.slot} ${bestSlot.s.p.name} ${AB(bestSlot.s.p)}: ${bestSlot.gain >= 5 ? 'UPGRADE' : bestSlot.gain >= -5 ? 'similar level' : 'NOT an upgrade'} (${bestSlot.gain >= 0 ? '+' : ''}${diff(bestSlot.gain)})`
                       : `fills an empty ${bestSlot.s.slot} slot`)
       : 'no position in our XI shape';
     line(`  fit: ${upgrade}${rank ? `; would rank #${rank} in our ${grp.label}` : ''}`);
@@ -357,7 +370,7 @@ function buildBriefing(dump, opts = {}) {
   // ---- squad list (trimmed to fit the token budget)
   const header = out.join('\n');
   const rows = [...all].sort((a, b) => (a.teamType ?? 50) - (b.teamType ?? 50) || b.ca - a.ca).map(p =>
-    `${p.name} ${p.age ?? '?'}y ${pos(p)} CA${CA(p)} PA${PA(p)} ${money(p.contract && p.contract.wageWeekly)}/w ` +
+    `${p.name} ${p.age ?? '?'}y ${pos(p)} ${AB(p)}${POT(p)} ${money(p.contract && p.contract.wageWeekly)}/w ` +
     `to ${((p.contract && p.contract.expires) || '?').slice(0, 7)} mor${p.morale ?? '?'}` +
     `${p.onLoanFrom ? ' [loan in]' : ''}${p.onLoanAt ? ` [loaned to ${p.onLoanAt}]` : outOnLoan(p) ? ' [loaned out]' : ''}${p.teamType >= 10 ? ' [youth]' : ''}`);
   let squadBlock = '';

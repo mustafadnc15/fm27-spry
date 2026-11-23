@@ -7,17 +7,17 @@ Player contracts total £66K/w (£3.45M/yr), 36 contracted players
 League table: not available yet.
 
 ## BEST XI BY CA: 4-3-3 (avg CA 118)
-GK  Atakan Ordu 23y CA122 PA129 Dri16 Pen16 Com16
-DL  Manu Romero 19y CA114 PA131 LSh15 Dec15 Det15
-DC  Emirhan Topçu 28y CA132 PA140 Fir17 Hea17 LSh17
-DC  Darko Gyabi 25y CA118 PA142 LTh16 Agg16 Dri15
-DR  Right Back One 26y CA110 PA115 Fin15 Fir15 Fre15
-DM  Holding Mid 29y CA116 PA118 Fre16 Fla16 Fin15
-MC  Dani Requena 25y CA124 PA153 Tec16 Agg16 Wor16
-MC  Aldivan 20y CA117 PA170 Fre16 Hea16 LSh16
-AML Left Winger 24y CA111 PA125 Mar15 Pac15 Fin14
-AMR Can Armando Güner 21y CA113 PA132 Fin15 Pas15 Ant15
-ST  Main Striker 27y CA125 PA128 Fin17 Com17 Con17
+GK  Atakan Ordu 23y CA122 PA129 Ref15 OnO15 Kic15
+DL  Manu Romero 19y CA114 PA131 Pac14 Sta14 Cro12
+DC  Emirhan Topçu 28y CA132 PA140 Hea17 Jum17 Com17
+DC  Darko Gyabi 25y CA118 PA142 Str15 Hea14 Jum14
+DR  Right Back One 26y CA110 PA115 Tac13 Pac12 Mar10
+DM  Holding Mid 29y CA116 PA118 Dec15 Pos14 Tea14
+MC  Dani Requena 25y CA124 PA153 Tec16 Wor16 Sta16
+MC  Aldivan 20y CA117 PA170 Vis16 Tea16 Ant16
+AML Left Winger 24y CA111 PA125 Pac15 OtB14 Fin14
+AMR Can Armando Güner 21y CA113 PA132 Pas15 Fin15 Cro14
+ST  Main Striker 27y CA125 PA128 Fin17 Com17 Dri16
 
 ## DEPTH (accomplished+ options, best first; available senior players)
 GK: Atakan Ordu 122, Bora Göymen 101, Third Keeper 80
@@ -65,13 +65,13 @@ Reserve 3 20y ST CA83 → PA124 (reserves/B team) | low professionalism 8
 Youth Back 18y DL CA70 → PA120 (youth)
 
 ## SHORTLIST: VERDICT INPUTS (sign / scout first / stretch / no)
-* Target Striker 24y ST (Rival FC) CA138 PA150 prime | Cro18 Fin18 Agg18
+* Target Striker 24y ST (Rival FC) CA138 PA150 prime | Fin18 Pac17 Str17
   fit: vs our ST Main Striker CA125: UPGRADE (+13); would rank #1 in our ST
-  money: over budget (£3.5M vs budget £40K); wage £9K/w (129% of our top earner); contract ends 2027-05-31 (could come on a pre-contract/free)
+  money: over budget (£3.5M vs budget £40K); wage £9K/w (129% of our top earner); contract ends 2027-05-31 (could come on a pre-contract/free); status at his club: fringe (code 4)
   character: model pro 17, poor in big games 8
-* Cheap Fullback 29y DR (Small FC) CA112 PA113 prime | Pen15 Wor15 NFi15
+* Cheap Fullback 29y DR (Small FC) CA112 PA113 prime | Wor15 Mar13 Pos11
   fit: vs our DR Right Back One CA110: similar level (+2); would rank #1 in our RB/RWB
-  money: affordable (£20K vs budget £40K); wage £1.5K/w (21% of our top earner); contract ends 2028-06-30
+  money: affordable (£20K vs budget £40K); wage £1.5K/w (21% of our top earner); contract ends 2028-06-30; status at his club: fringe (code 4)
   character: low professionalism 6, very ambitious 17, inconsistent 6, poor in big games 7
 (not found: "Nobody Here": no player with this name/ID)
 

@@ -114,4 +114,24 @@ function perceive(dump, judging) {
   return out;
 }
 
-module.exports = { perceive, blurPlayer, perceivedAbility, perceivedAttr, abilityWord, noise, widths };
+/**
+ * "What I see in FM" (attribute masking OFF): exact attributes and personality, but no CA, PA
+ * or hidden attributes, just like the game shows them. Ability becomes a position rating
+ * (1-20, from the key attributes of his best position). To keep the briefing's maths the same,
+ * p.ca holds rating x 10; the text shows the rating itself.
+ */
+function fmView(dump) {
+  const { ratingAt, dumpGetter, bestPosition } = require('./ratings');
+  const view = p => {
+    const q = JSON.parse(JSON.stringify(p));
+    const rating = ratingAt(dumpGetter(q), bestPosition(q));
+    q.ca = Math.round(rating * 10);
+    q.caText = rating.toFixed(1);
+    q.pa = null; q.paHidden = true;
+    delete q.hidden;
+    return q;
+  };
+  return { ...dump, meta: { ...(dump.meta || {}), visibility: 'attributes' }, squad: (dump.squad || []).map(view), shortlist: (dump.shortlist || []).map(view) };
+}
+
+module.exports = { fmView, perceive, blurPlayer, perceivedAbility, perceivedAttr, abilityWord, noise, widths };
