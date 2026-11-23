@@ -4,6 +4,9 @@
 // your shortlist.txt (never anything in the game).
 
 const POSITION_HELP = 'FM position codes or common names, e.g. ["ST"], ["DC"], ["DL","WBL"], ["AMC"], ["LW"], ["CB"], ["GK"].';
+const SLOT_HELP = 'Rate players for a slot of the manager\'s tactic instead of a generic position: the slot number ("6"), its positions ' +
+  '("DM-DC", "AMC-AMR"), a role in the tactic ("Second Striker"), or any role name or abbreviation ("Inside Forward", "IF") to judge ' +
+  'that role by the tactic\'s attribute needs. Results are then ranked by tactic rating; positions default to the slot\'s positions.';
 
 const TOOLS = [
   {
@@ -20,7 +23,8 @@ const TOOLS = [
       additionalProperties: false,
       properties: {
         positions: { type: 'array', items: { type: 'string' }, description: POSITION_HELP },
-        role: { type: 'string', enum: ['starter', 'backup'], description: 'Set the ability window relative to our own players at these positions.' },
+        tactic_slot: { type: 'string', description: SLOT_HELP },
+        role: { type: 'string', enum: ['starter', 'backup'], description: 'Set the ability window relative to our own players at these positions (or in this tactic slot). This is NOT a playing role; use tactic_slot for that.' },
         min_ca: { type: 'integer', description: 'Minimum current ability (1-200). Only when you can see CA.' },
         max_ca: { type: 'integer', description: 'Maximum current ability (1-200). Only when you can see CA.' },
         min_pa: { type: 'integer', description: 'Minimum potential ability (1-200). Only when you can see PA.' },
@@ -38,7 +42,7 @@ const TOOLS = [
         league: { type: 'string', description: 'Part of a league name, e.g. "Süper Lig".' },
         nationality: { type: 'string', description: 'Part of a nationality, e.g. "Turkey".' },
         exclude_own_club: { type: 'boolean', description: 'Default true.' },
-        sort_by: { type: 'string', enum: ['ca', 'pa', 'potential', 'value', 'age'], description: 'ca (default), pa, potential (PA minus CA), value (cheapest first), age (youngest first).' },
+        sort_by: { type: 'string', enum: ['ca', 'pa', 'potential', 'value', 'age', 'tactic'], description: 'ca (default), pa, potential (PA minus CA), value (cheapest first), age (youngest first), tactic (tactic rating; the default when tactic_slot is set).' },
         limit: { type: 'integer', description: 'How many to return (default 10, max 25).' },
       },
     },
@@ -56,6 +60,7 @@ const TOOLS = [
       properties: {
         player: { type: 'string', description: 'Player name, or his id number from an earlier result.' },
         positions: { type: 'array', items: { type: 'string' }, description: 'Compare at these positions instead of his best one. ' + POSITION_HELP },
+        tactic_slot: { type: 'string', description: 'Compare on what this slot of the tactic needs. ' + SLOT_HELP },
         affordable_only: { type: 'boolean' },
         max_fee: { type: 'integer' },
         min_age: { type: 'integer' },
@@ -129,7 +134,7 @@ function runTool(db, name, input, ctx) {
 function describe(name, input) {
   const i = input || {};
   if (name === 'search_players') {
-    const bits = [(i.positions || []).join('/'), i.role, i.affordable_only ? 'affordable' : null,
+    const bits = [i.tactic_slot ? `tactic slot ${i.tactic_slot}` : null, (i.positions || []).join('/'), i.role, i.affordable_only ? 'affordable' : null,
       i.max_age ? `age ≤ ${i.max_age}` : null, i.min_pa ? `PA ≥ ${i.min_pa}` : null, i.free_agents_only ? 'free agents' : null].filter(Boolean);
     return `Searching the player database${bits.length ? ': ' + bits.join(', ') : ''}`;
   }

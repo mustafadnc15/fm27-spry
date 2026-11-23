@@ -158,6 +158,8 @@ function tacticText(t, dir) {
     `Priority attributes: ${(t.priority || []).join(', ') || 'none'}`,
     '', ...(t.slots || []),
     '', `Attribute guide (wanted-player-attributes.txt): ${t.hasWantedAttributes ? 'loaded' : 'not found'}`,
+    `Measured attribute values (role-to-attribute.txt): ${t.hasEngineWeights ? 'loaded' : 'not found'}`,
+    `Tactic rating = ${t.rating || '?'}`,
     ...((t.problems || []).length ? ['', 'Problems in the file:', ...t.problems.map(p => '- ' + p)] : []),
   ].join('\n');
 }

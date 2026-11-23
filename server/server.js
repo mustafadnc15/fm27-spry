@@ -16,7 +16,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { buildBriefing, estimateTokens } = require('../briefing/briefing');
 const { perceive, fmView } = require('../briefing/realism');
 const { systemPrompt, DEFAULT_PHILOSOPHY } = require('./director');
-const { readTactic, slotLabel, roleLabel } = require('../briefing/tactic');
+const { loadModel, describeModel } = require('../briefing/tacticRating');
 const { PlayerDatabase } = require('./database');
 const { TOOLS, runTool, describe } = require('./tools');
 
@@ -88,22 +88,29 @@ function readDump() { return readJson(path.join(DATA_DIR, 'dump-latest.json')); 
 /** The briefing exactly as the Director will see it (with realism applied if on). */
 function currentBriefing(settings) {
   const dump = readDump();
-  const tactic = readTactic(DATA_DIR);   // read fresh each time, so edits to tactic.txt apply at the next question
-  if (!dump) return { dump: null, text: null, tactic };
+  // Tactic files are read fresh each time, so edits apply at the next question.
+  const model = loadModel(DATA_DIR);
+  if (!dump) return { dump: null, text: null, model };
   const seen = settings.visibility === 'scouted' ? perceive(dump, settings.judging)
     : settings.visibility === 'attributes' ? fmView(dump) : dump;
-  return { dump, text: buildBriefing(seen, { tactic }), tactic };
+  return { dump, text: buildBriefing(seen, { model }), model };
 }
 
 /** Short tactic summary for the settings dialog. */
-function tacticSummary(t) {
+function tacticSummary(model) {
+  const t = model && model.tactic;
   if (!t) return null;
   return {
     name: t.name, formation: t.formation, style: t.style, priority: t.priority, source: t.source,
-    slots: t.slots.map(s => `${slotLabel(s)}: ${roleLabel(s.inPossession)} / ${roleLabel(s.outOfPossession)}`),
-    hasWantedAttributes: !!t.wantedAttributes, problems: t.problems,
+    slots: model.slots.map(s => {
+      const abbr = r => (r ? ` [${r.abbr || 'yours'}, ${SOURCES_SHORT[r.basis] || r.basis}]` : ' [not in role table]');
+      return `${s.index}. ${s.label}: ${s.roles}${abbr(s.ip.role)}${s.oop.role !== s.ip.role ? abbr(s.oop.role) : ''}`;
+    }),
+    hasWantedAttributes: !!t.wantedAttributes, hasEngineWeights: !!model.engine, roleWeight: Math.round(model.roleWeight * 100),
+    rating: describeModel(model), problems: [...t.problems, ...model.problems],
   };
 }
+const SOURCES_SHORT = { p4fm: 'published FM26 guide', web: 'partly published', fm24: 'FM24 equivalent', est: 'estimate', file: 'your roles.txt' };
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -166,7 +173,7 @@ function friendlyError(e) {
 const MAX_TOOL_ROUNDS = 8;   // at most this many rounds of tool use per question
 
 /** Facts the database tools need about our club. */
-function toolContext(dump, settings) {
+function toolContext(dump, settings, tacticModel) {
   const club = dump.club || {};
   const wages = (dump.squad || []).map(p => p.contract && p.contract.wageWeekly).filter(w => w != null);
   return {
@@ -174,7 +181,7 @@ function toolContext(dump, settings) {
     transferBudget: club.transferBudget ?? null,
     wageHeadroom: club.wageBudgetWeekly != null && club.wageSpendWeekly != null ? club.wageBudgetWeekly - club.wageSpendWeekly : null,
     topWage: wages.length ? Math.max(...wages) : null,
-    visibility: settings.visibility, judging: settings.judging, dataDir: DATA_DIR,
+    visibility: settings.visibility, judging: settings.judging, dataDir: DATA_DIR, tactic: tacticModel,
   };
 }
 
@@ -184,7 +191,7 @@ async function chat(req, res) {
   if (!history.length || history[history.length - 1].role !== 'user') return send(res, 400, { error: 'Send a question first.' });
 
   const settings = readSettings();
-  const { dump, text: briefing, tactic } = currentBriefing(settings);
+  const { dump, text: briefing, model: tacticModel } = currentBriefing(settings);
 
   res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
   const event = obj => res.write(`data: ${JSON.stringify(obj)}\n\n`);
@@ -193,9 +200,9 @@ async function chat(req, res) {
     return res.end();
   }
 
-  const ctx = toolContext(dump, settings);
+  const ctx = toolContext(dump, settings, tacticModel);
   const system = [
-    { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, visibility: settings.visibility, databaseReady: database.load(), hasTactic: !!(tactic && tactic.slots.length) }) },
+    { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, visibility: settings.visibility, databaseReady: database.load(), hasTactic: tacticModel.slots.length > 0, hasEngineWeights: !!tacticModel.engine }) },
     { type: 'text', text: `<club_briefing>\n${briefing}\n</club_briefing>`, cache_control: { type: 'ephemeral' } },
   ];
   const messages = [...history];   // grows with tool calls and results during this answer
@@ -286,9 +293,9 @@ async function handle(req, res) {
     }
     if (req.method === 'GET' && url.pathname === '/api/state') {
       const settings = readSettings();
-      const { dump, text, tactic } = currentBriefing(settings);
+      const { dump, text, model: tacticModel } = currentBriefing(settings);
       return send(res, 200, {
-        settings, model: MODEL, hasKey: !!process.env.ANTHROPIC_API_KEY, dataDir: DATA_DIR, tactic: tacticSummary(tactic),
+        settings, model: MODEL, hasKey: !!process.env.ANTHROPIC_API_KEY, dataDir: DATA_DIR, tactic: tacticSummary(tacticModel),
         status: readJson(path.join(DATA_DIR, 'status.json')),
         dump: dump && { club: dump.club && dump.club.name, league: dump.club && dump.club.league, gameDate: dump.meta && dump.meta.gameDate,
           generatedAt: dump.meta && dump.meta.generatedAt, squad: (dump.squad || []).length, shortlist: (dump.shortlist || []).length },

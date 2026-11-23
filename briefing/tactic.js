@@ -87,10 +87,15 @@ function parseTactic(text) {
     const where = `line ${i + 1} ("${line.slice(0, 60)}")`;
 
     // Header lines: "key: value"
-    const header = line.match(/^(name|formation|style|priority|priorities)\s*:\s*(.*)$/i);
+    const header = line.match(/^(name|formation|style|priority|priorities|role ?weight)\s*:\s*(.*)$/i);
     if (header) {
       const key = header[1].toLowerCase(), val = header[2].trim();
       if (key === 'name') t.name = val || null;
+      else if (key.startsWith('role')) {
+        const n = Number(val.replace('%', '').trim());
+        if (Number.isFinite(n) && n >= 0 && n <= 100) t.roleWeight = n;
+        else t.problems.push(`${where}: role weight must be a number from 0 to 100`);
+      }
       else if (key === 'style') t.style = isPlaceholder(val) ? null : val;
       else if (key === 'formation') {
         const [ip, oop] = val.split('/').map(s => s.trim());

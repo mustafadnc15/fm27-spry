@@ -9,7 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { buildBriefing, estimateTokens } = require('./briefing');
-const { readTactic } = require('./tactic');
+const { loadModel } = require('./tacticRating');
 
 function dataDir() {
   // Same folder the plugin writes to (.NET's LocalApplicationData).
@@ -34,7 +34,7 @@ function main() {
     process.exit(1);
   }
 
-  const text = buildBriefing(dump, { tactic: readTactic(path.dirname(file)) });
+  const text = buildBriefing(dump, { model: loadModel(path.dirname(file)) });
   const outFile = path.join(path.dirname(file), 'briefing.txt');
   fs.writeFileSync(outFile, text, 'utf8');
   if (print) console.log(text);

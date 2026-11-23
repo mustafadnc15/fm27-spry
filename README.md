@@ -208,7 +208,32 @@ Put two plain text files in `%LOCALAPPDATA%\TrueDoF\`:
   ```
 
 - `wanted-player-attributes.txt` (optional): your own notes on which attributes the tactic
-  needs. The Director reads them word for word.
+  needs. The Director reads them word for word, and TrueDoF turns lines like `Pace: 12-20++`
+  (`++` top priority, `+` priority, `*` counts most above the low end) and
+  "Minimum requirements: … Work Rate …" into scoring curves.
+- `role-to-attribute.txt` (optional): a measured table of goals per season per attribute and
+  position group (`Attribute Team ST AM WB CB DM`, `*` = confirmed). When it's there, it drives
+  most of the rating. Only confirmed values are used.
+- `roles.txt` (optional): correct a role's highlighted attributes, one role per line:
+  `Second Striker = key: Finishing, Off the Ball, Acceleration | pref: Dribbling, Composure`.
+
+**Tactic rating.** With a tactic, the briefing's best XI fills your 11 slots, and the Director
+rates every player per slot (1–20):
+- the measured table (or, without it, your guide) for the tactic part;
+- FM's highlighted role attributes for the rest, at 25% (40% without the table);
+- multiplied by how familiar the player is with the slot's positions.
+
+Add `role weight: 10` (a percent) to `tactic.txt` to change the role share. Ask him things like
+"find me a cheaper option for slot 6" or "find me an inside forward for my tactic".
+
+Where the role attributes come from: no full FM26/FM27 list is published.
+- Four roles come from Passion4FM's FM26 guides: Advanced Wing-Back, Channel Midfielder,
+  Overlapping Centre-Back and Screening CM.
+- The forwards' key attributes come from FM26 coverage.
+- Roles that existed in FM24 use FM24's highlights.
+- Brand-new roles are TrueDoF's estimates.
+
+Settings → Your tactic shows which source each of your roles uses.
 
 The tactic shows up in the briefing ("What he sees") and in **Settings → Your tactic**, which
 also lists any line TrueDoF didn't understand. Edits apply at your next question, with no

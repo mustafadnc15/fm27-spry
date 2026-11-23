@@ -30,6 +30,21 @@ function expandPositions(list) {
 }
 
 const { KEY_ATTRS, styleGroup, ratingAt } = require('../briefing/ratings');
+const { buildModel, rateSlot, resolveSlot, slotAttributes } = require('../briefing/tacticRating');
+
+const NO_TACTIC = buildModel(null);   // roles only: used for "find me an IF" when no tactic is set
+
+/** Resolve input.tactic_slot → { model, slot } or { error }. */
+function tacticSlot(input, ctx) {
+  if (!input.tactic_slot) return {};
+  const model = ctx.tactic && (ctx.tactic.slots.length || ctx.tactic.engine || ctx.tactic.rules.length) ? ctx.tactic : NO_TACTIC;
+  const slot = resolveSlot(model, input.tactic_slot);
+  if (slot) return { model, slot };
+  const list = model.slots.map(s => `${s.index} ${s.label} (${s.roles})`).join('; ');
+  return { error: `"${input.tactic_slot}" is not a slot of the tactic or a role TrueDoF knows.${list ? ` Slots: ${list}.` : ' No tactic is set (tactic.txt).'} You can also pass a role name or abbreviation such as "Inside Forward" or "IF".` };
+}
+
+function slotPositions(slot) { return slot.anyOf || [...new Set([slot.ip.position, slot.oop.position])]; }
 
 // ---------------------------------------------------------------- helpers
 
@@ -87,6 +102,20 @@ class PlayerDatabase {
    *  attributes  - exact attributes, no CA/PA: ability = position rating 1-20 at `pos` (ca holds rating x 10)
    *  scouted     - realism estimates (ranges) from his judging ability
    */
+  /**
+   * view() plus the player's rating for a tactic slot (v.tactic = { score, rating, fit, goals }).
+   * In the attributes-only view the tactic rating replaces the position rating as his "ability".
+   */
+  slotView(r, ctx, model, slot) {
+    const v = this.view(r, ctx, slotPositions(slot)[0]);
+    const t = rateSlot(model, slot, v.attr, p => r.pr[POS_KEYS.indexOf(p)] || 0);
+    v.tactic = t;
+    const goals = t.goals != null ? `, eng ${t.goals >= 0 ? '+' : ''}${t.goals.toFixed(1)} goals/season` : '';
+    if (ctx.visibility === 'attributes') { v.ca = Math.round(t.score * 10); v.caText = `tactic rating ${t.score.toFixed(1)} as ${slot.label}${goals}`; }
+    else v.tacticText = `tactic rating ${t.score.toFixed(1)} as ${slot.label}${goals}`;
+    return v;
+  }
+
   view(r, ctx, pos) {
     const exact = k => r.at[this.attrIndex[k]] || 0;
     if (ctx.visibility === 'attributes') {
@@ -140,22 +169,29 @@ class PlayerDatabase {
     if (r.tl) bits.push('transfer-listed or transfer arranged');
     if (r.ll) bits.push('loan-listed');
     if (r.ss) bits.push(`status: ${r.ss}`);
-    bits.push(`best: ${this.topAttrs(r, v)}`);
+    if (v.tacticText) bits.push(v.tacticText);
+    if (v.tactic) bits.push(`pace ${v.attrText('pace')}, acceleration ${v.attrText('acceleration')}, stamina ${v.attrText('stamina')}, jumping reach ${v.attrText('jumpingReach')}`);
+    else bits.push(`best: ${this.topAttrs(r, v)}`);
     if (fee != null && ctx.transferBudget != null && r.c) bits.push(fee <= ctx.transferBudget ? 'fee within budget' : `fee ${Math.round(fee / Math.max(1, ctx.transferBudget))}x budget`);
     return `${bits.join(' | ')}${extra} | id ${r.id}`;
   }
 
   // ---- our own squad at some positions (for "starter" / "backup" searches)
 
-  ourOptions(positions, ctx) {
+  ourOptions(positions, ctx, ts = {}) {
     return this.rows.filter(r => r.c === ctx.ownClub && !r.la && this.plays(r, positions))
-      .map(r => ({ r, v: this.view(r, ctx, positions[0]) })).map(o => ({ ...o, ca: o.v.ca })).sort((a, b) => b.ca - a.ca);
+      .map(r => ({ r, v: ts.slot ? this.slotView(r, ctx, ts.model, ts.slot) : this.view(r, ctx, positions[0]) }))
+      .map(o => ({ ...o, ca: o.v.tactic ? o.v.tactic.score * 10 : o.v.ca })).sort((a, b) => b.ca - a.ca);
   }
 
   // ---------------------------------------------------------------- tools
 
   search(input, ctx) {
-    const positions = expandPositions(input.positions);
+    const ts = tacticSlot(input, ctx);
+    if (ts.error) return ts.error;
+    let positions = expandPositions(input.positions);
+    if (!positions.length && ts.slot) positions = slotPositions(ts.slot);
+    let tMin = null, tMax = null;   // starter/backup window on the tactic rating (x10) when a tactic slot is given
     const role = ['starter', 'backup'].includes(input.role) ? input.role : null;
     let minCa = num(input.min_ca, 1, 200), maxCa = num(input.max_ca, 1, 200);
     const minPa = ctx.visibility === 'attributes' ? null : num(input.min_pa, 1, 200), minAge = num(input.min_age, 14, 45), maxAge = num(input.max_age, 14, 45);
@@ -173,14 +209,18 @@ class PlayerDatabase {
     }
 
     if (role && positions.length) {
-      const ours = this.ourOptions(positions, ctx);
+      const ours = this.ourOptions(positions, ctx, ts);
       const starter = ours[0], backup = ours[1];
       if (starter) {
-        notes.push(`Our current options there: ${ours.slice(0, 3).map(o => `${o.r.n} ${o.v.caText}`).join(', ')}.`);
-        if (role === 'starter') minCa = Math.max(minCa ?? 0, starter.ca - 3);
-        else { minCa = Math.max(minCa ?? 0, (backup ? backup.ca : starter.ca - 15) - 10); maxCa = Math.min(maxCa ?? 200, starter.ca + 2); }
+        notes.push(`Our current options there: ${ours.slice(0, 3).map(o => `${o.r.n} ${o.v.tacticText || o.v.caText}`).join(', ')}.`);
+        let lo, hi = null;
+        if (role === 'starter') lo = starter.ca - 3;
+        else { lo = (backup ? backup.ca : starter.ca - 15) - 10; hi = starter.ca + 2; }
+        if (ts.slot) { tMin = lo; tMax = hi; }
+        else { minCa = Math.max(minCa ?? 0, lo); if (hi != null) maxCa = Math.min(maxCa ?? 200, hi); }
       } else notes.push('We have nobody accomplished at that position, so any decent player is an upgrade.');
     }
+    if (ts.slot) notes.push(`Rated for ${ts.slot.label === ts.slot.roles ? ts.slot.label : `${ts.slot.label}: ${ts.slot.roles}`} with the tactic's attribute needs.`);
     if (bool(input.affordable_only)) {
       if (ctx.transferBudget != null) maxFee = Math.min(maxFee ?? Infinity, ctx.transferBudget);
       const wageCap = Math.max(ctx.wageHeadroom ?? 0, ctx.topWage ?? 0);
@@ -207,20 +247,25 @@ class PlayerDatabase {
         if (!cheapRoute && (fee == null || fee > maxFee)) continue;
       }
       if (maxWage != null && r.w != null && r.w > maxWage) continue;
-      const v = this.view(r, ctx, positions[0]);
+      const v = ts.slot ? this.slotView(r, ctx, ts.model, ts.slot) : this.view(r, ctx, positions[0]);
       if (minCa != null && v.ca < minCa) continue;
       if (maxCa != null && v.ca > maxCa) continue;
       if (minPa != null && v.pa < minPa) continue;
+      if (tMin != null && v.tactic.score * 10 < tMin) continue;
+      if (tMax != null && v.tactic.score * 10 > tMax) continue;
       found.push({ r, v });
     }
 
     let sort = input.sort_by;
+    if (ts.slot && (!sort || sort === 'ca')) sort = 'tactic';
     if (attrsOnly && (sort === 'pa' || sort === 'potential')) { notes.push('Potential is not visible in this mode, so sorted by rating instead.'); sort = 'ca'; }
-    const key = sort === 'pa' ? x => x.v.pa : sort === 'potential' ? x => x.v.pa - x.v.ca
+    const key = sort === 'tactic' ? x => x.v.tactic.score : sort === 'pa' ? x => x.v.pa : sort === 'potential' ? x => x.v.pa - x.v.ca
       : sort === 'value' ? x => -(this.fee(x.r) ?? 1e12) : sort === 'age' ? x => -(x.r.a ?? 99) : x => x.v.ca;
     found.sort((a, b) => key(b) - key(a));
 
-    const head = [`Found ${found.length} player(s)${found.length > limit ? `, showing the top ${limit}` : ''}, sorted by ${(sort || 'ca') === 'ca' && attrsOnly ? 'position rating' : sort || 'ca'}.` +
+    const sortName = sort === 'tactic' ? 'tactic rating' : (sort || 'ca') === 'ca' && attrsOnly ? 'position rating' : sort || 'ca';
+    const head = [`Found ${found.length} player(s)${found.length > limit ? `, showing the top ${limit}` : ''}, sorted by ${sortName}.` +
+      `${tMin != null || tMax != null ? ` Tactic rating window: ${((tMin ?? 10) / 10).toFixed(1)}-${((tMax ?? 200) / 10).toFixed(1)}.` : ''}` +
       `${positions.length ? ` Positions: ${positions.join('/')}.` : ''}${minCa != null || maxCa != null ? (attrsOnly ? ` Rating window: ${((minCa ?? 10) / 10).toFixed(1)}-${((maxCa ?? 200) / 10).toFixed(1)}.` : ` CA window: ${minCa ?? 1}-${maxCa ?? 200}${ctx.visibility === 'scouted' ? ' (on our scouts\' estimates)' : ''}.`) : ''}`];
     return [...head, ...notes, ...found.slice(0, limit).map((x, i) => `${i + 1}. ${this.line(x.r, ctx, '', x.v)}`)].join('\n');
   }
@@ -239,9 +284,16 @@ class PlayerDatabase {
   similar(input, ctx) {
     const { match: target, others } = this.findPlayer(input.player);
     if (!target) return `No player called "${input.player}" in the database. Check the spelling, or he may play in a league that isn't loaded in this save.`;
-    const positions = expandPositions(input.positions).length ? expandPositions(input.positions) : [this.bestPosition(target)];
-    const keys = KEY_ATTRS[styleGroup(positions[0])];
-    const tv = this.view(target, ctx, positions[0]);
+    const ts = tacticSlot(input, ctx);
+    if (ts.error) return ts.error;
+    const positions = expandPositions(input.positions).length ? expandPositions(input.positions)
+      : ts.slot ? slotPositions(ts.slot) : [this.bestPosition(target)];
+    // With a tactic slot: compare on what that slot needs (its roles and the tactic's attribute guide),
+    // and judge level by the tactic rating.
+    const keys = ts.slot ? slotAttributes(ts.model, ts.slot) : KEY_ATTRS[styleGroup(positions[0])];
+    const see = r => (ts.slot ? this.slotView(r, ctx, ts.model, ts.slot) : this.view(r, ctx, positions[0]));
+    const lvl = v => (v.tactic ? v.tactic.score * 10 : v.ca);
+    const tv = see(target);
     const vec = v => { const xs = keys.map(k => v.attr(k)); const mean = xs.reduce((a, b) => a + b, 0) / xs.length; return xs.map(x => x - mean); };
     const t = vec(tv), tNorm = Math.hypot(...t) || 1;
     const maxFee = bool(input.affordable_only) && ctx.transferBudget != null ? ctx.transferBudget : num(input.max_fee, 0, 2e9);
@@ -258,14 +310,14 @@ class PlayerDatabase {
         const m = monthsBetween(ctx.today, r.x), fee = this.fee(r);
         if (!(!r.c || (m != null && m <= 6)) && (fee == null || fee > maxFee)) continue;
       }
-      const v = this.view(r, ctx, positions[0]);
+      const v = see(r);
       const x = vec(v), xNorm = Math.hypot(...x) || 1;
       const shape = (t.reduce((s, ti, i) => s + ti * x[i], 0) / (tNorm * xNorm) + 1) / 2;
-      const level = Math.max(0, 1 - Math.abs(v.ca - tv.ca) / 40);
+      const level = Math.max(0, 1 - Math.abs(lvl(v) - lvl(tv)) / 40);
       scored.push({ r, v, score: 0.7 * shape + 0.3 * level });
     }
     scored.sort((a, b) => b.score - a.score);
-    const head = `Players most like ${target.n} (${target.c || 'free agent'}, ${tv.caText}) at ${positions.join('/')}, compared on ${keys.join(', ')}:` +
+    const head = `Players most like ${target.n} (${target.c || 'free agent'}, ${tv.tacticText || tv.caText}) at ${ts.slot ? ts.slot.label : positions.join('/')}, compared on ${keys.join(', ')}:` +
       (others.length ? `\n(Other players with that name: ${others.map(o => `${o.n} of ${o.c || 'no club'}, id ${o.id}`).join('; ')}. Use an id to pick one.)` : '');
     return [head, ...scored.slice(0, limit).map((x, i) => `${i + 1}. ${this.line(x.r, ctx, ` | similarity ${Math.round(x.score * 100)}%`, x.v)}`)].join('\n');
   }
@@ -282,6 +334,11 @@ class PlayerDatabase {
     if (ctx.visibility === 'attributes') {
       const spots = POS_KEYS.filter((p, i) => r.pr[i] >= 15);
       out.push(`Position ratings (TrueDoF, from attributes): ${spots.map(p => `${p} ${ratingAt(k => r.at[this.attrIndex[k]] || 0, p).toFixed(1)}`).join(', ')}`);
+    }
+    if (ctx.tactic && ctx.tactic.slots.length) {
+      const fits = ctx.tactic.slots.map(s => ({ s, t: rateSlot(ctx.tactic, s, v.attr, p => r.pr[POS_KEYS.indexOf(p)] || 0) }))
+        .filter(x => x.t.fit > 0).sort((a, b) => b.t.score - a.t.score).slice(0, 3);
+      out.push(`Best slots in our tactic: ${fits.map(x => `${x.s.index}. ${x.s.label} ${x.s.roles} tactic ${x.t.score.toFixed(1)}${x.t.goals != null ? ` (eng ${x.t.goals >= 0 ? '+' : ''}${x.t.goals.toFixed(1)})` : ''}`).join('; ') || 'none (no familiar position)'}`);
     }
     out.push(`Positions (1-20): ${POS_KEYS.map((p, i) => [p, r.pr[i]]).filter(x => x[1] >= 10).map(x => `${x[0]} ${x[1]}`).join(', ')}`);
     for (const g of ['technical', 'mental', 'physical', ...(gk ? ['goalkeeping'] : [])]) out.push(`${g}: ${groups[g].join(', ')}`);

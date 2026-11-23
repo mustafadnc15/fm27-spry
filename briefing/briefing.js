@@ -1,6 +1,7 @@
 'use strict';
 const { KEY_ATTRS, styleGroup, dumpGetter, bestPosition } = require('./ratings');
 const { tacticLines } = require('./tactic');
+const { buildModel, rateSlot, bestXI: tacticXI, describeModel } = require('./tacticRating');
 // TrueDoF briefing builder.
 // Turns dump-latest.json into a compact text briefing (< ~3,000 tokens) for the AI Director.
 // All football maths happens HERE, in plain code, so the AI receives facts it can't miscount.
@@ -175,12 +176,13 @@ function ageStage(age) {
 function buildBriefing(dump, opts = {}) {
   // opts.tactic: the manager's tactic (briefing/tactic.js). Its section gets its own token allowance,
   // so describing the tactic never squeezes the squad list.
-  const tacticBlock = opts.tactic ? tacticLines(opts.tactic) : [];
+  const tacticObj = opts.model ? opts.model.tactic : opts.tactic;
+  const tacticBlock = tacticObj ? tacticLines(tacticObj) : [];
   const maxTokens = (opts.maxTokens || 3000) + estimateTokens(tacticBlock.join('\n'));
   const meta = dump.meta || {}, club = dump.club || {};
   const realism = meta.realism || null;   // set by realism.perceive(): numbers are estimates
   const attrsOnly = meta.visibility === 'attributes';   // set by realism.fmView(): no CA/PA, position ratings instead
-  const diff = d => attrsOnly ? (d / 10).toFixed(1) : String(Math.round(d));
+  const diff = d => attrsOnly || useTactic ? (d / 10).toFixed(1) : String(Math.round(d));
   const today = meta.gameDate || (meta.generatedAt || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
 
   const all = (dump.squad || []).map(p => ({ ...p, ca: p.ca || 0, pa: p.pa || 0 }));
@@ -189,10 +191,31 @@ function buildBriefing(dump, opts = {}) {
   const senior = available.filter(p => p.teamType === 0 || p.teamType == null);
   const pool = senior.length >= 11 ? senior : available;
 
-  const xi = bestXI(pool);
+  // With a tactic, the XI fills the tactic's slots by tactic rating (tacticRating.js); without one, it
+  // tries four common formations by CA (or by position rating in the attributes-only view).
+  const model = opts.model || (opts.tactic ? buildModel(opts.tactic) : null);
+  const useTactic = !!(model && model.slots.length);
+  const candidate = p => ({ id: p.uid, get: dumpGetter(p), prOf: k => (p.positionRatings || {})[k] || 0, ref: p });
+  let xi;
+  if (useTactic) {
+    const r = tacticXI(model, pool.map(candidate));
+    xi = {
+      formation: model.tactic.name || 'your tactic',
+      slots: r.slots.map(s => ({ slot: s.slot.label, def: s.slot, p: s.c && s.c.ref, outOfPosition: !!s.c && s.fit < 0.9, score: s.c ? s.score * 10 : 0, rate: s })),
+    };
+  } else {
+    xi = bestXI(pool);
+    xi.slots.forEach(s => { if (s.p) s.score = s.p.ca; });
+  }
+  // A slot's value on one scale: tactic rating x10, or CA (position rating x10 in the attributes view).
+  const slotValue = (p, s) => {
+    if (useTactic) return rateSlot(model, s.def, dumpGetter(p), k => (p.positionRatings || {})[k] || 0).score * 10;
+    return fit(p, FORMATIONS[xi.formation][xi.slots.indexOf(s)]) * p.ca;
+  };
   const xiPlayers = xi.slots.filter(s => s.p).map(s => s.p);
   const xiIds = new Set(xiPlayers.map(p => p.uid));
-  const xiAvg = xiPlayers.length ? Math.round(xiPlayers.reduce((t, p) => t + p.ca, 0) / xiPlayers.length) : 0;
+  const filledSlots = xi.slots.filter(s => s.p);
+  const xiAvg = filledSlots.length ? Math.round(filledSlots.reduce((t, s) => t + s.score, 0) / filledSlots.length) : 0;
 
   const out = [];
   const line = s => out.push(s);
@@ -234,18 +257,42 @@ function buildBriefing(dump, opts = {}) {
 
   // ---- best XI
   line('');
-  line(`## BEST XI BY ${attrsOnly ? 'POSITION RATING' : 'CA'}: ${xi.formation} (avg ${attrsOnly ? 'rating ' + (xiAvg / 10).toFixed(1) : 'CA ' + (realism ? '~' : '') + xiAvg})`);
-  for (const s of xi.slots) {
-    if (!s.p) { line(`${s.slot}: NOBODY`); continue; }
-    const p = s.p;
-    line(`${s.slot.padEnd(3)} ${p.name} ${p.age ?? '?'}y ${AB(p)}${POT(p)} ${topAttrs(p)}${s.outOfPosition ? ' (OUT OF POSITION)' : ''}`);
+  if (useTactic) {
+    line(`## BEST XI FOR YOUR TACTIC: ${xi.formation} (avg tactic rating ${(xiAvg / 10).toFixed(1)})`);
+    line(`Tactic rating 1-20 = ${describeModel(model)}; times position familiarity (natural 1.0, accomplished 0.9, ` +
+      `competent 0.75) averaged over the slot's two positions.${model.engine ? ' "eng" = measured worth in goals per season vs an all-10 player in that slot (compare within a slot).' : ''}`);
+    if (model.problems.length) line(`(rating notes: ${model.problems.join('; ')})`);
+    const benchFor = s => pool.filter(p => !xiIds.has(p.uid)).map(p => ({ p, v: slotValue(p, s) })).sort((a, b) => b.v - a.v)[0];
+    for (const s of xi.slots) {
+      const head = `${String(s.def.index).padStart(2)}. ${s.slot} ${s.def.roles}:`;
+      if (!s.p) { line(`${head} NOBODY`); continue; }
+      const p = s.p, r = s.rate, g = dumpGetter(p);
+      const fam = r.fit < 0.9 ? ` (familiarity ${[...new Set([s.def.ip.position, s.def.oop.position])].map(x => `${x} ${(p.positionRatings || {})[x] || 0}`).join(', ')})` : '';
+      const next = benchFor(s);
+      line(`${head} ${p.name} ${p.age ?? '?'}y tactic ${r.score.toFixed(1)}${r.goals != null ? ` eng ${r.goals >= 0 ? '+' : ''}${r.goals.toFixed(1)}` : ''} ` +
+        `| Pac${g('pace')} Acc${g('acceleration')} Sta${g('stamina')} Jum${g('jumpingReach')} | ${AB(p)}${POT(p)}${fam}` +
+        `${next ? ` | next: ${next.p.name} ${(next.v / 10).toFixed(1)}` : ''}`);
+    }
+  } else {
+    line(`## BEST XI BY ${attrsOnly ? 'POSITION RATING' : 'CA'}: ${xi.formation} (avg ${attrsOnly ? 'rating ' + (xiAvg / 10).toFixed(1) : 'CA ' + (realism ? '~' : '') + xiAvg})`);
+    for (const s of xi.slots) {
+      if (!s.p) { line(`${s.slot}: NOBODY`); continue; }
+      const p = s.p;
+      line(`${s.slot.padEnd(3)} ${p.name} ${p.age ?? '?'}y ${AB(p)}${POT(p)} ${topAttrs(p)}${s.outOfPosition ? ' (OUT OF POSITION)' : ''}`);
+    }
   }
 
   // ---- depth
   line('');
   line('## DEPTH (accomplished+ options, best first; available senior players)');
   const depth = {};
-  for (const g of GROUPS) {
+  // With a tactic: only the position groups the tactic uses (with the ball), wanting at least one more
+  // option than it has slots there. A strikerless tactic doesn't need strikers.
+  const groups = !useTactic ? GROUPS : GROUPS.map(g => {
+    const n = model.slots.filter(s => g.pos.includes(s.ip.position)).length;
+    return n ? { ...g, want: Math.max(g.want, n + 1) } : null;
+  }).filter(Boolean);
+  for (const g of groups) {
     const opts2 = pool.filter(p => g.pos.some(x => ((p.positionRatings || {})[x] || 0) >= ACCOMPLISHED)).sort((a, b) => b.ca - a.ca);
     depth[g.key] = opts2;
     const names = opts2.slice(0, 4).map(p => `${p.name} ${CA(p)}`).join(', ') || 'none';
@@ -260,12 +307,19 @@ function buildBriefing(dump, opts = {}) {
   for (const s of xi.slots) {
     if (!s.p) { weak.push(`${s.slot}: no player at all`); continue; }
     if (s.outOfPosition) weak.push(`${s.slot}: ${s.p.name} plays out of position`);
-    if (s.p.ca <= xiAvg - 10) weak.push(`${s.slot}: ${s.p.name} ${AB(s.p)} is ${diff(xiAvg - s.p.ca)} below XI average`);
+    if (s.score <= xiAvg - 10) weak.push(`${s.slot}: ${s.p.name} ${useTactic ? `tactic ${(s.score / 10).toFixed(1)}` : AB(s.p)} is ${diff(xiAvg - s.score)} below XI average`);
+    if (useTactic && s.def.ip.position !== 'GK') {
+      // The manager's own minimums: priority attributes below the guide's range, minimum requirements below their floor.
+      const g = dumpGetter(s.p);
+      const short = model.rules.filter(r => r.kind !== 'special' && r.kind !== 'good' && g(r.attr) > 0 && g(r.attr) < r.lo)
+        .map(r => `${r.attr} ${g(r.attr)} (wants ${r.lo}+)`);
+      if (short.length) weak.push(`${s.slot}: ${s.p.name} below the tactic's requirements: ${short.join(', ')}`);
+    }
     if ((s.p.age || 0) >= 32) weak.push(`${s.slot}: ${s.p.name} is ${s.p.age}, decline coming`);
     const f = flags(s.p).filter(x => /inconsistent|big games|injury-prone|professionalism|hot-headed/.test(x));
     if (f.length) weak.push(`${s.slot}: ${s.p.name}: ${f.join(', ')}`);
   }
-  for (const g of GROUPS) {
+  for (const g of groups) {
     const o = depth[g.key];
     if (o.length < g.want) weak.push(`${g.label}: only ${o.length} of ${g.want} wanted options`);
     else if (o.length >= 2 && o[0].ca - o[1].ca >= 20) weak.push(`${g.label}: big drop behind ${o[0].name} (${CA(o[0])} → ${CA(o[1])})`);
@@ -333,11 +387,10 @@ function buildBriefing(dump, opts = {}) {
     // Where would he play, and who is there now?
     let bestSlot = null;
     xi.slots.forEach(s => {
-      const slotDef = FORMATIONS[xi.formation][xi.slots.indexOf(s)];
-      const f = fit(p, slotDef);
-      if (f > 0 && (!bestSlot || f * p.ca - (s.p ? s.p.ca : 0) > bestSlot.gain)) bestSlot = { s, gain: f * p.ca - (s.p ? s.p.ca : 0) };
+      const v = slotValue(p, s);
+      if (v > 0 && (!bestSlot || v - (s.p ? s.score : 0) > bestSlot.gain)) bestSlot = { s, v, gain: v - (s.p ? s.score : 0) };
     });
-    const grp = GROUPS.find(g => g.pos.some(x => (p.naturalPositions || []).includes(x)));
+    const grp = groups.find(g => g.pos.some(x => (p.naturalPositions || []).includes(x)));
     const rank = grp ? depth[grp.key].filter(q => q.ca > p.ca).length + 1 : null;
 
     const price = p.askingPriceGbp ?? p.valueGbp;
@@ -353,10 +406,12 @@ function buildBriefing(dump, opts = {}) {
 
     const owner = p.onLoanAt ? `${p.club || '?'}, on loan at ${p.onLoanAt}${p.loanEnds ? ` until ${p.loanEnds}` : ''}` : (p.club || '?');
     line(`* ${p.name} ${p.age ?? '?'}y ${pos(p)} (${owner}) ${AB(p)}${POT(p)} ${ageStage(p.age)} | ${topAttrs(p)}`);
+    const ours = s => useTactic ? `tactic ${(s.score / 10).toFixed(1)}` : AB(s.p);
     const upgrade = bestSlot
-      ? (bestSlot.s.p ? `vs our ${bestSlot.s.slot} ${bestSlot.s.p.name} ${AB(bestSlot.s.p)}: ${bestSlot.gain >= 5 ? 'UPGRADE' : bestSlot.gain >= -5 ? 'similar level' : 'NOT an upgrade'} (${bestSlot.gain >= 0 ? '+' : ''}${diff(bestSlot.gain)})`
+      ? (bestSlot.s.p ? `${useTactic ? `best slot ${bestSlot.s.slot} (tactic ${(bestSlot.v / 10).toFixed(1)}) ` : ''}vs our ${bestSlot.s.slot} ${bestSlot.s.p.name} ${ours(bestSlot.s)}: ` +
+                        `${bestSlot.gain >= 5 ? 'UPGRADE' : bestSlot.gain >= -5 ? 'similar level' : 'NOT an upgrade'} (${bestSlot.gain >= 0 ? '+' : ''}${diff(bestSlot.gain)})`
                       : `fills an empty ${bestSlot.s.slot} slot`)
-      : 'no position in our XI shape';
+      : useTactic ? 'fits no slot of our tactic (not familiar with any of its positions)' : 'no position in our XI shape';
     line(`  fit: ${upgrade}${rank ? `; would rank #${rank} in our ${grp.label}` : ''}`);
     line(`  money: ${afford}; wage ${money(wage)}/w${wageVsTop ? ` (${wageVsTop})` : ''}; contract ends ${(p.contract && p.contract.expires) || '?'}` +
       `${monthsLeft != null && monthsLeft <= 6 ? ' (could come on a pre-contract/free)' : monthsLeft != null && monthsLeft <= 12 ? ' (final year: cheaper)' : ''}` +

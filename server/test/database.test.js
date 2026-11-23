@@ -131,3 +131,25 @@ test('attributes-only view: no CA/PA anywhere, ranked by position rating, hidden
   assert.match(p, /Position ratings \(TrueDoF, from attributes\): DC \d+\.\d/);
   assert.ok(!/\bCA \d|\bPA \d/.test(p));
 });
+
+test('tactic_slot: ranks by tactic rating, works for any role, explains bad slots', () => {
+  const { parseTactic } = require('../../briefing/tactic');
+  const { buildModel } = require('../../briefing/tacticRating');
+  const { database, ctx } = setup('attributes');
+  ctx.tactic = buildModel(parseTactic('priority: pace, acceleration\nGK = Goalkeeper\nST = Poacher / Tracking Centre Forward'));
+  const r = runTool(database, 'search_players', { tactic_slot: '2', limit: 5 }, ctx);
+  assert.strictEqual(r.isError, false);
+  assert.match(r.text, /sorted by tactic rating/);
+  const scores = lines(r.text).map(l => Number(l.match(/tactic rating (\d+\.\d) as ST/)[1]));
+  assert.ok(scores.length > 1);
+  assert.deepStrictEqual(scores, [...scores].sort((a, b) => b - a));
+  assert.match(lines(r.text)[0], /pace \d+, acceleration \d+/);
+  const starter = runTool(database, 'search_players', { tactic_slot: 'ST', role: 'starter' }, ctx);
+  assert.match(starter.text, /Our current options there: Main Striker tactic rating/);
+  const inf = runTool(database, 'search_players', { tactic_slot: 'Inside Forward' }, ctx);
+  assert.match(inf.text, /Rated for IF \(not in the tactic\): Inside Forward/);
+  assert.match(runTool(database, 'search_players', { tactic_slot: 'banana' }, ctx).text, /not a slot of the tactic.*Slots: 1 GK/);
+  const sim = runTool(database, 'find_similar_players', { player: 'Main Striker', tactic_slot: '2' }, ctx);
+  assert.match(sim.text, /at ST, compared on .*pace/);
+  assert.match(runTool(database, 'get_player_profile', { player: 'Main Striker' }, ctx).text, /Best slots in our tactic: 2\. ST/);
+});
