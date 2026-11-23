@@ -119,6 +119,13 @@ public sealed class PlayerReader
         return p;
     }
 
+    /// <summary>person → contract → team pointer (0 if missing).</summary>
+    public ulong ContractTeam(ulong person)
+    {
+        ulong con = _m.Ptr(person + (ulong)L.Contract);
+        return con == 0 ? 0 : _m.Ptr(con + (ulong)L.ConTeam);
+    }
+
     /// <summary>person → contract → team → club pointer (0 if any step is missing).</summary>
     public ulong ContractClub(ulong person)
     {

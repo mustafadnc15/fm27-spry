@@ -3,7 +3,7 @@ namespace TrueDoF;
 /// <summary>Options for one dump. The plugin fills these from the BepInEx config file.</summary>
 public sealed class Settings
 {
-    public const string ToolVersion = "0.1.5";
+    public const string ToolVersion = "0.2.0";
 
     public string Host = "plugin";
     public string OutDir = DefaultOutDir();
@@ -13,6 +13,7 @@ public sealed class Settings
     public string ProbeInspect = "";
     public int ProbeInspectBytes = 0x800;
     public int ShortlistMaxMatches = 3;
+    public bool ExportDatabase = true;   // also write players-db.json (the whole player database) on each dump
 
     public static string DefaultOutDir() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TrueDoF");

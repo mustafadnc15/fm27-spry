@@ -19,6 +19,7 @@ public static class Program
             if (args[i] == "--probe" && i + 1 < args.Length) { s.ProbeEnabled = true; s.ProbeValues = args[++i]; }
             else if (args[i] == "--depth" && i + 1 < args.Length && int.TryParse(args[++i], out int d)) s.ProbeDepth = Math.Clamp(d, 0, 4);
             else if (args[i] == "--out" && i + 1 < args.Length) s.OutDir = args[++i];
+            else if (args[i] == "--no-db") s.ExportDatabase = false;
             else if (args[i] == "--inspect" && i + 1 < args.Length) { s.ProbeEnabled = true; s.ProbeInspect = args[++i]; }
         }
 

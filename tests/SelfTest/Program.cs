@@ -122,6 +122,21 @@ public static class Program
         Check("probe notes unchanged value", probe.Contains("Same value as last time"));
         Check("diagnostics written", File.ReadAllText(Path.Combine(outDir, "diagnostics.txt")).Contains("0x0288"));
 
+        // ---- Player database export (players-db.json)
+        var db = JsonDocument.Parse(File.ReadAllText(Path.Combine(outDir, "players-db.json"))).RootElement;
+        var dbPlayers = db.GetProperty("players").EnumerateArray().ToList();
+        Check("database has every player", dbPlayers.Count == 8);
+        var dbTs = dbPlayers.First(p => p.GetProperty("n").GetString() == "Test Striker");
+        Check("database row: club, league, CA/PA", dbTs.GetProperty("c").GetString() == "Rival FC" && dbTs.GetProperty("lg").GetString() == "Test Premier League"
+              && dbTs.GetProperty("ca").GetInt32() == 160 && dbTs.GetProperty("pa").GetInt32() == 165);
+        int attrCount = db.GetProperty("meta").GetProperty("attrKeys").GetArrayLength();
+        Check("database row: attribute arrays", dbTs.GetProperty("at").GetArrayLength() == attrCount && attrCount == 47
+              && dbTs.GetProperty("pr").GetArrayLength() == 15 && dbTs.GetProperty("hd").GetArrayLength() == 5 && dbTs.GetProperty("ps").GetArrayLength() == 8);
+        var keys = db.GetProperty("meta").GetProperty("attrKeys").EnumerateArray().Select(k => k.GetString()).ToList();
+        Check("database row: pace 18", dbTs.GetProperty("at")[keys.IndexOf("pace")].GetInt32() == 18);
+        Check("database row: loan club", dbPlayers.First(p => p.GetProperty("n").GetString() == "Far Away").GetProperty("la").GetString() == "Rival FC");
+        Check("status counts database players", JsonDocument.Parse(File.ReadAllText(Path.Combine(outDir, "status.json"))).RootElement.GetProperty("databasePlayers").GetInt32() == 8);
+
         // ---- Failure case: FM still starting (no game_plugin.dll) must keep the old dump ----
         string before = File.ReadAllText(Path.Combine(outDir, "dump-latest.json"));
         w.Memory.HideGamePlugin = true;

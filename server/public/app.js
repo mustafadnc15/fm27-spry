@@ -75,6 +75,7 @@ async function send(text) {
   save(); render();
   const reply = bubble('assistant', 'Thinking…', 'thinking');
   let answer = '', failed = '';
+  const tools = [];   // little "Searching the database…" notes shown while he works
   try {
     const res = await fetch('/api/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -93,12 +94,19 @@ async function send(text) {
         if (!chunk.startsWith('data: ')) continue;
         const ev = JSON.parse(chunk.slice(6));
         if (ev.type === 'text') { answer += ev.text; reply.classList.remove('thinking'); reply.innerHTML = md(answer); chatEl.scrollTop = chatEl.scrollHeight; }
+        else if (ev.type === 'tool') {
+          const t = document.createElement('div'); t.className = 'tool-note'; t.textContent = ev.text + '…';
+          reply.after(t); tools.push(t);
+          if (!answer) { reply.textContent = 'Thinking…'; }
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
         else if (ev.type === 'error') failed = ev.message;
       }
     }
   } catch (e) {
     failed = 'Could not reach the TrueDoF app: ' + e.message;
   }
+  tools.forEach(t => t.remove());
   if (answer) history.push({ role: 'assistant', content: answer });
   else history.pop();   // nothing came back: drop the question so the conversation stays valid
   save();

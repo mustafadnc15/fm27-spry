@@ -26,6 +26,34 @@ function startFakeApi() {
         }
         res.writeHead(200, { 'Content-Type': 'text/event-stream' });
         const ev = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
+        const msgs = JSON.parse(body || '{}').messages || [];
+        const last = msgs[msgs.length - 1] || {};
+        const lastText = typeof last.content === 'string' ? last.content : '';
+        if (/find me/i.test(lastText)) {
+          // First round: the "model" calls search_players
+          ev('message_start', { message: { id: 'msg_t', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 1 } } });
+          ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
+          ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'Let me check the database.' } });
+          ev('content_block_stop', { index: 0 });
+          ev('content_block_start', { index: 1, content_block: { type: 'tool_use', id: 'toolu_1', name: 'search_players', input: {} } });
+          ev('content_block_delta', { index: 1, delta: { type: 'input_json_delta', partial_json: '{"positions":["ST"],' } });
+          ev('content_block_delta', { index: 1, delta: { type: 'input_json_delta', partial_json: '"role":"starter","limit":3}' } });
+          ev('content_block_stop', { index: 1 });
+          ev('message_delta', { delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 20 } });
+          ev('message_stop', {});
+          return res.end();
+        }
+        if (Array.isArray(last.content) && last.content[0] && last.content[0].type === 'tool_result') {
+          // Second round: answer using the tool result
+          const first = (last.content[0].content.split('\n').find(l => l.startsWith('1. ')) || '').split(' | ')[0];
+          ev('message_start', { message: { id: 'msg_u', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 300, output_tokens: 1 } } });
+          ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
+          ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: `Top pick: ${first}` } });
+          ev('content_block_stop', { index: 0 });
+          ev('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 10 } });
+          ev('message_stop', {});
+          return res.end();
+        }
         ev('message_start', { message: { id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 100, output_tokens: 1 } } });
         ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
         ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: '**SIGN.** ' } });
@@ -108,6 +136,25 @@ test('Director app end to end', async t => {
     assert.ok(call.body.system[1].text.includes('<club_briefing>') && call.body.system[1].text.includes('Target Striker'));
     assert.deepStrictEqual(call.body.system[1].cache_control, { type: 'ephemeral' });
     assert.ok(call.headers['x-api-key'] === 'test-key' || call.headers.authorization === 'Bearer test-key');
+  });
+
+  await t.test('the Director can search the player database mid-answer', async () => {
+    const { db } = require('./dbfixture').dbFixture();
+    fs.writeFileSync(path.join(dataDir, 'players-db.json'), JSON.stringify(db));
+    const before = seen.length;
+    const r = await request(port, 'POST', '/api/chat', { messages: [{ role: 'user', content: 'Find me a starting striker.' }] });
+    const events = sse(r.text);
+    assert.ok(events.some(e => e.type === 'tool' && /Searching the player database: ST, starter/.test(e.text)));
+    const text = events.filter(e => e.type === 'text').map(e => e.text).join('');
+    assert.match(text, /^Let me check the database\.\n\nTop pick: 1\. Other Player \d+ \(\d+, ST\)/);
+    // two API calls: the question, then the tool result
+    assert.strictEqual(seen.length - before, 2);
+    const second = seen[seen.length - 1].body;
+    assert.ok(second.tools.some(t => t.name === 'search_players' && t.eager_input_streaming === true));
+    const toolResult = second.messages[second.messages.length - 1].content[0];
+    assert.strictEqual(toolResult.tool_use_id, 'toolu_1');
+    assert.match(toolResult.content, /Our current options there: Main Striker CA 125/);
+    assert.match(second.system[0].text, /search the whole player database/);
   });
 
   await t.test('realism setting changes what the Director sees', async () => {

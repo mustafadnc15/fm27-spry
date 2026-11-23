@@ -22,6 +22,7 @@ public class Plugin : BasePlugin
     private ConfigEntry<string> _probeValues;
     private ConfigEntry<int> _probeDepth;
     private ConfigEntry<int> _shortlistMax;
+    private ConfigEntry<bool> _exportDb;
     private ConfigEntry<string> _probeInspect;
     private ConfigEntry<int> _probeInspectBytes;
 
@@ -37,6 +38,8 @@ public class Plugin : BasePlugin
                 "Key that writes the dump while FM is in front. Examples: F8, Ctrl+F8, Shift+D.");
             _shortlistMax = Config.Bind("General", "ShortlistMaxMatchesPerName", 3,
                 "If a shortlist name matches several players, include at most this many (highest CA first).");
+            _exportDb = Config.Bind("General", "ExportPlayerDatabase", true,
+                "Also write players-db.json (every player in your loaded leagues) so the Director chat can search it. Adds a few seconds to F8.");
             _probeEnabled = Config.Bind("Probe", "ProbeEnabled", false,
                 "Discovery mode: also write probe.txt, searching for the numbers in ProbeValues.");
             _probeValues = Config.Bind("Probe", "ProbeValues", "",
@@ -84,6 +87,7 @@ public class Plugin : BasePlugin
             ProbeInspect = _probeInspect.Value,
             ProbeInspectBytes = _probeInspectBytes.Value,
             ShortlistMaxMatches = Math.Clamp(_shortlistMax.Value, 1, 10),
+            ExportDatabase = _exportDb.Value,
         };
     }
 }

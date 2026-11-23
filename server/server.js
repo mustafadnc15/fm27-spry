@@ -16,6 +16,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { buildBriefing, estimateTokens } = require('../briefing/briefing');
 const { perceive } = require('../briefing/realism');
 const { systemPrompt, DEFAULT_PHILOSOPHY } = require('./director');
+const { PlayerDatabase } = require('./database');
+const { TOOLS, runTool, describe } = require('./tools');
 
 const ROOT = path.join(__dirname, '..');
 loadEnv(path.join(ROOT, '.env'));
@@ -25,6 +27,7 @@ const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 const DATA_DIR = process.env.TRUEDOF_DATA_DIR || defaultDataDir();
 const SETTINGS_FILE = path.join(DATA_DIR, 'director-settings.json');
 const PUBLIC = path.join(__dirname, 'public');
+const database = new PlayerDatabase(path.join(DATA_DIR, 'players-db.json'));
 const MAX_HISTORY = 40;   // messages kept per request (oldest dropped first)
 
 // ---------------------------------------------------------------- helpers
@@ -137,10 +140,25 @@ function friendlyError(e) {
   return 'Something went wrong: ' + (e && e.message ? e.message : String(e));
 }
 
+const MAX_TOOL_ROUNDS = 8;   // at most this many rounds of tool use per question
+
+/** Facts the database tools need about our club. */
+function toolContext(dump, settings) {
+  const club = dump.club || {};
+  const wages = (dump.squad || []).map(p => p.contract && p.contract.wageWeekly).filter(w => w != null);
+  return {
+    ownClub: club.name, today: (dump.meta && dump.meta.gameDate) || new Date().toISOString().slice(0, 10),
+    transferBudget: club.transferBudget ?? null,
+    wageHeadroom: club.wageBudgetWeekly != null && club.wageSpendWeekly != null ? club.wageBudgetWeekly - club.wageSpendWeekly : null,
+    topWage: wages.length ? Math.max(...wages) : null,
+    realism: settings.realism, judging: settings.judging, dataDir: DATA_DIR,
+  };
+}
+
 async function chat(req, res) {
   const body = await readBody(req);
-  const messages = cleanHistory(body.messages);
-  if (!messages.length || messages[messages.length - 1].role !== 'user') return send(res, 400, { error: 'Send a question first.' });
+  const history = cleanHistory(body.messages);
+  if (!history.length || history[history.length - 1].role !== 'user') return send(res, 400, { error: 'Send a question first.' });
 
   const settings = readSettings();
   const { dump, text: briefing } = currentBriefing(settings);
@@ -152,36 +170,63 @@ async function chat(req, res) {
     return res.end();
   }
 
-  let stream = null;
-  req.on('close', () => { if (!res.writableEnded && stream) stream.abort(); });
+  const ctx = toolContext(dump, settings);
+  const system = [
+    { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, realism: settings.realism, databaseReady: database.load() }) },
+    { type: 'text', text: `<club_briefing>\n${briefing}\n</club_briefing>`, cache_control: { type: 'ephemeral' } },
+  ];
+  const messages = [...history];   // grows with tool calls and results during this answer
+  let stream = null, closed = false, wroteText = false;
+  res.on('close', () => { closed = true; if (stream) stream.abort(); });
+  const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+
   try {
-    stream = claude().beta.messages.stream({
-      model: MODEL,
-      max_tokens: 64000,
-      thinking: { type: 'adaptive' },
-      output_config: { effort: settings.effort },
-      // If a safety check declines the request, the API retries on Anthropic's recommended fallback model.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      system: [
-        { type: 'text', text: systemPrompt({ clubName: dump.club && dump.club.name, philosophy: settings.philosophy, realism: settings.realism }) },
-        { type: 'text', text: `<club_briefing>\n${briefing}\n</club_briefing>`, cache_control: { type: 'ephemeral' } },
-      ],
-      cache_control: { type: 'ephemeral' },   // also cache the conversation so far
-      messages,
-    });
-    for await (const ev of stream) {
-      if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') event({ type: 'text', text: ev.delta.text });
+    for (let round = 0; round < MAX_TOOL_ROUNDS && !closed; round++) {
+      stream = claude().beta.messages.stream({
+        model: MODEL,
+        max_tokens: 64000,
+        thinking: { type: 'adaptive' },
+        output_config: { effort: settings.effort },
+        // If a safety check declines the request, the API retries on Anthropic's recommended fallback model.
+        betas: ['server-side-fallback-2026-07-01'],
+        fallbacks: 'default',
+        tools: TOOLS,
+        system,
+        cache_control: { type: 'ephemeral' },   // also cache the conversation so far
+        messages,
+      });
+      let roundText = false;
+      for await (const ev of stream) {
+        if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta') {
+          if (!roundText && wroteText) event({ type: 'text', text: '\n\n' });   // keep text from separate rounds apart
+          roundText = wroteText = true;
+          event({ type: 'text', text: ev.delta.text });
+        }
+      }
+      const final = await stream.finalMessage();
+      const u = final.usage || {};
+      usage.input += u.input_tokens || 0; usage.output += u.output_tokens || 0;
+      usage.cacheRead += u.cache_read_input_tokens || 0; usage.cacheWrite += u.cache_creation_input_tokens || 0;
+
+      if (final.stop_reason === 'refusal') { event({ type: 'error', message: 'The model declined to answer this one. Try rephrasing the question.' }); break; }
+      const calls = final.content.filter(b => b.type === 'tool_use');
+      if (final.stop_reason === 'max_tokens') { event({ type: 'error', message: 'The answer was cut off because it got too long. Ask for a shorter answer.' }); break; }
+      if (final.stop_reason !== 'tool_use' || !calls.length) break;
+
+      // Run the tools he asked for, then let him continue with the results.
+      messages.push({ role: 'assistant', content: final.content });
+      const results = [];
+      for (const call of calls) {
+        event({ type: 'tool', text: describe(call.name, call.input) });
+        const r = runTool(database, call.name, call.input, ctx);
+        results.push({ type: 'tool_result', tool_use_id: call.id, content: r.text, ...(r.isError ? { is_error: true } : {}) });
+      }
+      messages.push({ role: 'user', content: results });
+      if (round === MAX_TOOL_ROUNDS - 1) event({ type: 'error', message: 'He searched a lot without finishing. Try a narrower question.' });
     }
-    const final = await stream.finalMessage();
-    if (final.stop_reason === 'refusal')
-      event({ type: 'error', message: 'The model declined to answer this one. Try rephrasing the question.' });
-    else if (final.stop_reason === 'max_tokens')
-      event({ type: 'error', message: 'The answer was cut off because it got too long. Ask for a shorter answer.' });
-    const u = final.usage || {};
-    event({ type: 'done', model: final.model, usage: { input: u.input_tokens, output: u.output_tokens, cacheRead: u.cache_read_input_tokens, cacheWrite: u.cache_creation_input_tokens } });
+    event({ type: 'done', model: MODEL, usage });
   } catch (e) {
-    if (!res.writableEnded && !(e && e.name === 'APIUserAbortError')) event({ type: 'error', message: friendlyError(e) });
+    if (!closed && !(e && e.name === 'APIUserAbortError')) event({ type: 'error', message: friendlyError(e) });
   }
   res.end();
 }
@@ -225,6 +270,7 @@ async function handle(req, res) {
         dump: dump && { club: dump.club && dump.club.name, league: dump.club && dump.club.league, gameDate: dump.meta && dump.meta.gameDate,
           generatedAt: dump.meta && dump.meta.generatedAt, squad: (dump.squad || []).length, shortlist: (dump.shortlist || []).length },
         briefingTokens: text ? estimateTokens(text) : 0,
+        databasePlayers: database.load() ? database.rows.length : 0,
       });
     }
     if (req.method === 'GET' && url.pathname === '/api/briefing') {

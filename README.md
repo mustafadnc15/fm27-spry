@@ -162,6 +162,31 @@ instructions. He has a club philosophy, argues with you, and gives every transfe
 3. Open <http://localhost:8766> in your browser and ask away. Leave the terminal window open
    while you chat; close it to stop the app.
 
+### He can search the whole player database
+
+On every F8 the plugin also writes `players-db.json`: every player in the leagues loaded in
+your save (tens of thousands). While answering, the Director can use four tools on it by
+himself:
+
+- **search players**: by position, age, ability, fee, wage, contract, league, nationality
+  and transfer/loan list. Ask for a **starter** and he looks at or above your current first
+  choice there. Ask for a **backup** and he looks at or a bit below. "Affordable" uses your
+  transfer budget and wage room (free agents and players in their last 6 months count too).
+- **find similar players**: alternatives to any player, compared on the attributes that
+  matter for his position.
+- **player profile**: everything about any player.
+- **add to shortlist**: puts a player in your `shortlist.txt` (only when you ask). He gets a
+  full report after the next refresh.
+
+While he works you'll see notes like "Searching the player database: ST, starter,
+affordable…". With **Realism** on, he searches and ranks on his scouts' estimates, not the
+true numbers. To switch the export off, set `ExportPlayerDatabase = false` in the plugin
+config.
+
+FM's own shortlists can't be read yet. Saved shortlist files are encrypted, and nobody has
+found where FM keeps the shortlist in memory. So `shortlist.txt` (or "add him to the
+shortlist" in the chat) is the way to go.
+
 ### Buttons and settings
 
 - **Refresh from FM**: asks the plugin for fresh data, the same as pressing F8 in the game.
@@ -229,7 +254,7 @@ you see in the game.
 ```
 core/      all logic (memory reading, scanning, club dump, shortlist, probe, output)
 briefing/  Phase 2: dump → briefing text, plus realism (Node.js, no dependencies)
-server/    Phase 3: the Director chat web app (Node.js + Anthropic SDK)
+server/    Phase 3: the Director chat web app (Node.js + Anthropic SDK), database search tools
 plugin/    BepInEx entry point (TrueDoF.dll)
 cli/       external reader (TrueDoF.Cli.exe)
 tests/     self-test with a fake FM memory image (runs on any OS)

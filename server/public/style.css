@@ -67,3 +67,4 @@ dialog textarea, dialog select { padding: 8px; border-radius: 8px; border: 1px s
   header { padding: 10px 16px; }
   .msg { max-width: 100%; }
 }
+.tool-note { align-self: flex-start; font-size: 13px; color: var(--muted); padding: 0 14px; }

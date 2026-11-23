@@ -137,6 +137,19 @@ public static class DumpRunner
 
             WriteAtomic(Path.Combine(s.OutDir, "dump-latest.json"), JsonSerializer.Serialize(dump, Json));
 
+            if (s.ExportDatabase)
+            {
+                // The whole player database for the Director's search tools. A failure here never spoils the dump.
+                try
+                {
+                    status.Progress = 0.95; WriteStatus(s, status);
+                    var today = DateTime.TryParse(dump.Meta.GameDate, out var gd) ? gd : DateTime.Today;
+                    bool female = dump.Squad.Count(p => p.Female) * 2 > dump.Squad.Count;
+                    status.DatabasePlayers = DatabaseExport.Write(mem, layout, scan, today, female, Path.Combine(s.OutDir, "players-db.json"), diag);
+                }
+                catch (Exception e) { diag.Add("Player database export failed: " + e.Message); }
+            }
+
             if (s.ProbeEnabled)
             {
                 try
@@ -193,7 +206,7 @@ public static class DumpRunner
         public string ToolVersion = Settings.ToolVersion;
         public string Host;
         public string Club;
-        public int SquadCount, ShortlistCount, TransferCount;
+        public int SquadCount, ShortlistCount, TransferCount, DatabasePlayers;
         public long DurationMs;
         public double Progress;
     }
@@ -210,10 +223,12 @@ public static class DumpRunner
     }
 
     /// <summary>Write to .tmp, then swap in. Readers never see a half-written file.</summary>
-    public static void WriteAtomic(string path, string content)
+    public static void WriteAtomic(string path, string content) => WriteAtomicBytes(path, new UTF8Encoding(false).GetBytes(content));
+
+    public static void WriteAtomicBytes(string path, byte[] content)
     {
         string tmp = path + ".tmp";
-        File.WriteAllText(tmp, content, new UTF8Encoding(false));
+        File.WriteAllBytes(tmp, content);
         for (int i = 1; ; i++)
         {
             try { File.Move(tmp, path, true); return; }
