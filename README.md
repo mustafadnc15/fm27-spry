@@ -11,7 +11,7 @@ Status: **everything below is built and verified in-game** on FM27 27.1 (Game Pa
 - the overlay window over FM;
 - the one-click launcher.
 
-Not yet available: the league table and FM's own shortlist.
+Not yet available: FM's own shortlist (use `shortlist.txt`).
 
 Rules TrueDoF follows:
 
@@ -338,17 +338,17 @@ restart needed.
 | Transfer activity (completed / agreed deals involving you or your shortlist) | ✅ no fees |
 | Morale | ✅ 1–20 plus FM's own word (10 = Okay, 13 = Good, 17 = Excellent, 18 = Superb, 19 = Exceptional, 20 = Perfect) |
 | Balance, transfer budget, wage budget (weekly) | ✅ |
-| League table | ❌ not mapped yet: use the probe |
+| League table (your league: P W D L, goals, points, home and away) | ✅ |
 | FM's own shortlist | ❌ use `shortlist.txt` |
 
 Money is always **pounds (GBP)**. That's how FM stores it internally, whatever currency
 you see in the game.
 
-### The probe: helping TrueDoF find the league table
+### The probe: finding data nobody has mapped yet
 
 1. In FM, set the currency to pounds (Preferences → Units → Currency).
-2. Note your **exact** balance, transfer budget and wage budget from the Finances screen,
-   plus your points and goal difference from the league table.
+2. Note the **exact** numbers you want found, e.g. balance, transfer budget and wage budget
+   from the Finances screen.
 3. Edit `<FM27>\BepInEx\config\com.truedof.plugin.cfg`:
 
    ```ini
@@ -365,8 +365,15 @@ you see in the game.
 5. Play a match, so the numbers change. Update `ProbeValues` and press F8 again. Now
    `probe.txt` lists **CONFIRMED** places, meaning ones that held the old value before and
    the new value now. Those are the real fields.
-6. `ProbeInspect` dumps one memory object with labels (team / club / player / text). Each
-   `+0x…` is followed as a pointer.
+6. `ProbeInspect` dumps one memory object with labels (team / club / player / text / C++ class).
+   Each `+0x…` is followed as a pointer. It can also start from an address, e.g.
+   `ProbeInspect = 0x26DA961D1E0 +0xC0`.
+7. **Search by name instead of by value:** every F8 writes `classes.txt`, with every C++ class on
+   FM's heap (from the game's type information), how many objects it has, and up to 3 addresses.
+   Pick a class whose name sounds right (that's how the league table was found:
+   `LEAGUE_STAGE`) and inspect one of its addresses. Addresses change every time FM starts.
+
+Turn the probe off again (`ProbeEnabled = false`) when you're done: it makes F8 slower.
 
 ---
 

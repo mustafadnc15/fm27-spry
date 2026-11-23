@@ -111,6 +111,18 @@ public sealed class Layout
     public int TacSlotSize = 0x48;
     public int TacRoleMask = 0x10;         // in a slot entry: u64 role mask (one of bits 21-23 + one bit naming the role)
 
+    // ---- League table (found by TrueDoF itself with classes.txt, in the user's FM27 27.1 save, Nov 2026) ----
+    // league (db::COMP, team+TeamComp) → running competition → its stages → the league stage → rows,
+    // already sorted by table position. Every row holds three records: overall, home and away.
+    public int CompActual = 0xB0;          // COMP → sicomps::ACTUAL_COMP
+    public int ActualStages = 0x1C0;       // (begin, end) of pointers to stage objects
+    public string LeagueStageSuffix = "LEAGUE_STAGE@sicomps@@";   // LEAGUE_STAGE (also SUB_LEAGUE_STAGE)
+    public int StageRows = 0xC0;           // (begin, end) of pointers to table rows, in table order
+    public int RowTeam = 0x88;             // the team (db::TEAM) of this row
+    public int RowOverall = 0x08, RowHome = 0x20, RowAway = 0x38;   // three records, 0x18 bytes each
+    public int RecGoalsFor = 0x0, RecGoalsAgainst = 0x2, RecPoints = 0x4;   // i16 (points can go negative after deductions)
+    public int RecPlayed = 0x6, RecWon = 0x8, RecDrawn = 0x9, RecLost = 0xA;  // u8
+
     /// <summary>Role bit → FM's abbreviation, with the ball (FMLibreEditor's reading on FM27 Steam + Game Pass).</summary>
     public static readonly Dictionary<int, string> InPossessionRoles = new()
     {

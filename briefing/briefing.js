@@ -173,6 +173,32 @@ function ageStage(age) {
  * For realism mode, pass the dump through realism.perceive() first: players then carry
  * caRange / paRange / attrRanges and the briefing prints ranges instead of exact values.
  */
+/**
+ * The league table as short lines: every team (yours marked), then where you stand.
+ * Games left assumes everyone plays everyone twice (most leagues); the text says so.
+ */
+function leagueTableLines(lt) {
+  const rows = lt.rows, n = rows.length;
+  const us = rows.find(r => r.isUs);
+  const out = [`## LEAGUE TABLE: ${lt.competition || 'your league'} (P W D L goals GD Pts)`];
+  const gd = v => (v > 0 ? `+${v}` : String(v));
+  for (const r of rows)
+    out.push(`${r.isUs ? '>>' : '  '}${String(r.position).padStart(2)}. ${r.club} ${r.played} ${r.won} ${r.drawn} ${r.lost} ` +
+      `${r.goalsFor}-${r.goalsAgainst} ${gd(r.goalDifference)} ${r.points}`);
+  if (!us) return out;
+  const rec = x => x ? `${x.won}-${x.drawn}-${x.lost} (${x.goalsFor}-${x.goalsAgainst}, ${x.points} pts)` : '?';
+  const above = rows[us.position - 2], below = rows[us.position];
+  const gaps = [];
+  if (us.position > 1) gaps.push(`${rows[0].points - us.points} pts behind the leader`);
+  if (above && us.position > 2) gaps.push(`${above.points - us.points} behind ${above.club} (${above.position}.)`);
+  if (below) gaps.push(`${us.points - below.points} ahead of ${below.club} (${below.position}.)`);
+  const left = 2 * (n - 1) - us.played;
+  out.push(`You: ${us.position}. of ${n}, ${us.points} pts${gaps.length ? `, ${gaps.join(', ')}` : ''}. ` +
+    `Home ${rec(us.home)}, away ${rec(us.away)}.` +
+    (left > 0 ? ` About ${left} league games left (if every team meets every other twice; check the league's format).` : ''));
+  return out;
+}
+
 function buildBriefing(dump, opts = {}) {
   // opts.tactic: the manager's tactic (briefing/tactic.js). Its section gets its own token allowance,
   // so describing the tactic never squeezes the squad list.
@@ -251,10 +277,9 @@ function buildBriefing(dump, opts = {}) {
   const lt = dump.leagueTable || {};
   if (lt.mapped && lt.rows && lt.rows.length) {
     line('');
-    line('## LEAGUE TABLE');
-    lt.rows.slice(0, 20).forEach(r => line(`${r.position}. ${r.club} P${r.played} Pts${r.points} GD${r.goalDifference}`));
+    leagueTableLines(lt).forEach(l => line(l));
   } else {
-    line(`League table: not available yet.`);
+    line(`League table: not available (${lt.note || 'not read'}).`);
   }
 
   // ---- best XI
@@ -452,4 +477,4 @@ function buildBriefing(dump, opts = {}) {
 /** Rough token count: ~4 characters per token for English text with numbers. */
 function estimateTokens(text) { return Math.ceil(text.length / 4); }
 
-module.exports = { buildBriefing, bestXI, estimateTokens, money, flags, topAttrs, FORMATIONS, GROUPS };
+module.exports = { buildBriefing, leagueTableLines, bestXI, estimateTokens, money, flags, topAttrs, FORMATIONS, GROUPS };

@@ -30,6 +30,7 @@ public sealed class ScanResult
     public readonly List<ulong> Selections = new();                 // match-engine team selections (your tactic lives there)
     public readonly Dictionary<ulong, long> VtableCounts = new();   // vtable → objects seen (diagnostics)
     public readonly Dictionary<ulong, string> VtableNames = new();  // vtable → C++ class name, where readable
+    public readonly Dictionary<ulong, List<ulong>> VtableSamples = new();   // vtable → a few object addresses (classes.txt, probe)
     public long BytesTotal, BytesUnreadable, Candidates;
     public int RegionErrors;
     public string FirstRegionError;
@@ -54,6 +55,7 @@ public static class HeapScanner
     private const int ChunkBytes = 16 * 1024 * 1024;
     private const int Overlap = 0x80;   // re-read a little at chunk edges so nothing on a border is missed
     private const int MaxWorkers = 6;
+    private const int SamplesPerClass = 3;
 
     // Read buffers are reused between dumps and pinned (they never move), so we can tell
     // the scanner to skip them: inside fm.exe they would otherwise contain copies of FM objects.
@@ -135,6 +137,11 @@ public static class HeapScanner
             foreach (var m in l.ManagerPersons) if (!result.ManagerPersons.Contains(m)) result.ManagerPersons.Add(m);
             foreach (var sel in l.Selections) if (!result.Selections.Contains(sel)) result.Selections.Add(sel);
             foreach (var kv in l.VtableCounts) result.VtableCounts[kv.Key] = result.VtableCounts.GetValueOrDefault(kv.Key) + kv.Value;
+            foreach (var kv in l.VtableSamples)
+            {
+                if (!result.VtableSamples.TryGetValue(kv.Key, out var list)) result.VtableSamples[kv.Key] = list = new List<ulong>();
+                foreach (var a in kv.Value) if (list.Count < SamplesPerClass) list.Add(a);
+            }
             foreach (var d in l.Deals)
                 if (dealSeen.Add((d.Person, d.ToTeam, d.FromTeam, d.Date, d.Status))) result.Deals.Add(d);
             result.BytesUnreadable += l.BytesUnreadable;
@@ -209,8 +216,16 @@ public static class HeapScanner
             local.Candidates++;
 
             var info = classCache.GetOrAdd(vt, v => Describe(mem, L, gp, ga, v));
-            if (info.Name != null) local.VtableCounts[vt] = local.VtableCounts.GetValueOrDefault(vt) + 1;   // real classes only
             ulong p = chunkBase + (ulong)i;
+            if (info.Name != null)   // real classes only
+            {
+                long n = local.VtableCounts[vt] = local.VtableCounts.GetValueOrDefault(vt) + 1;
+                if (n <= SamplesPerClass)
+                {
+                    if (!local.VtableSamples.TryGetValue(vt, out var list)) local.VtableSamples[vt] = list = new List<ulong>();
+                    list.Add(p);
+                }
+            }
             if (info.Selection) { local.Selections.Add(p); continue; }   // checked later by TacticReader
 
             int cls = info.Cls;

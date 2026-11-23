@@ -680,7 +680,7 @@
   "leagueTable": {
     "mapped": false,
     "competition": "Test Premier League",
-    "note": "League table offsets are not mapped yet. Run the probe (README) with your points and goal difference.",
+    "note": "The league table could not be read (details in diagnostics.txt).",
     "rows": []
   },
   "shortlist": [

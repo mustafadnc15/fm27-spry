@@ -67,6 +67,7 @@ A failed F8 never overwrites your last good data.
 | "Port 8766 is already in use" | TrueDoF is already running (close the other window), or set `PORT=8767` in `.env` |
 | "No game data yet" | Press F8 in FM with your save loaded |
 | He talks about old data | Press F8 (or ↻ Refresh) after changes in FM; the header shows when the data was read |
+| "The league table is not available" | `diagnostics.txt` has a "League table: …" line with the reason. Off-season (no league running yet) is normal; after an FM patch, see section 7 |
 
 ## 5. The Director window (overlay)
 
@@ -149,6 +150,11 @@ Names don't change when offsets move, so:
   - **Found, but the "selection @…" lines show 0/11 of our players:** the person id offset
     (`PersonId`) or the slots offset (`SelSlots`) moved.
   - **The roles look wrong:** check `TacInPossession`, `TacOutOfPossession` and `TacSlotSize`.
+- **The league table:** `diagnostics.txt` has a "League table: …" line saying where it stopped
+  (no running competition, no league stage, or rows whose numbers don't add up). The path is
+  `CompActual` → `ActualStages` → `StageRows` → `RowTeam` / `RowOverall` / `RowHome` / `RowAway` in
+  `core/Layout.cs`. To re-find it: in `classes.txt`, take an `ACTUAL_COMP@sicomps` or
+  `LEAGUE_STAGE@sicomps` address and dump it with `ProbeInspect = 0x…` (README, "The probe").
 
 ### Step 4: compare sample players with FM
 

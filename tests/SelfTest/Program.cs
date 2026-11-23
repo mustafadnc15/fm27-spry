@@ -121,7 +121,23 @@ public static class Program
             Check("empty slot has no player", slots[3].GetProperty("player").ValueKind == JsonValueKind.Null);
             Check("rival's selection ignored", tactic.GetProperty("copies").GetInt32() == 1 && tactic.GetProperty("otherTactics").GetInt32() == 0);
         }
+        // ---- League table ----
+        var lt = json.GetProperty("leagueTable");
+        var rows = lt.GetProperty("rows").EnumerateArray().ToList();
+        Check("league table read (broken stage skipped)", lt.GetProperty("mapped").GetBoolean() && rows.Count == 3);
+        if (rows.Count == 3)
+        {
+            Check("league order kept: Rival FC 1st", rows[0].GetProperty("club").GetString() == "Rival FC" && rows[0].GetProperty("position").GetInt32() == 1);
+            var usRow = rows[1];
+            Check("our row: 2nd, marked, P10 W6 D2 L2 16-10 +6 20 pts", usRow.GetProperty("isUs").GetBoolean() && !rows[0].GetProperty("isUs").GetBoolean()
+                  && usRow.GetProperty("played").GetInt32() == 10 && usRow.GetProperty("won").GetInt32() == 6 && usRow.GetProperty("drawn").GetInt32() == 2
+                  && usRow.GetProperty("lost").GetInt32() == 2 && usRow.GetProperty("goalsFor").GetInt32() == 16 && usRow.GetProperty("goalsAgainst").GetInt32() == 10
+                  && usRow.GetProperty("goalDifference").GetInt32() == 6 && usRow.GetProperty("points").GetInt32() == 20);
+            Check("our home/away records", usRow.GetProperty("home").GetProperty("points").GetInt32() == 12 && usRow.GetProperty("away").GetProperty("won").GetInt32() == 2);
+        }
         string diagText = File.ReadAllText(Path.Combine(outDir, "diagnostics.txt"));
+        Check("diagnostics explain the skipped league stage", diagText.Contains("don't add up") && diagText.Contains("League table: 3 teams"));
+        Check("classes.txt lists classes with sample addresses", File.ReadAllText(Path.Combine(outDir, "classes.txt")).Contains("LEAGUE_STAGE@sicomps@@  0x"));
         Check("diagnostics list class names", diagText.Contains("Most common C++ classes") && diagText.Contains(".?AVSOMETHING_ELSE@db@@") == false
               && diagText.Contains("PREPARED_TACTICS_CREATOR_ARRAY"));
         Check("role bit decoding", TacticReader.RoleBit((1UL << 22) | (1UL << 46)) == (46, true) && !TacticReader.RoleBit(1UL << 22).ok
@@ -217,13 +233,17 @@ public static class Program
             _heap.W64(_nation + 0x20, Text("Testland"));
 
             var gameDate = new DateTime(2027, 3, 14);
-            ulong comp = _heap.Alloc(0x80);
+            ulong comp = _heap.Alloc(0x100);
             _heap.W64(comp + (ulong)L.CompName, Text("Test Premier League"));
             _heap.W32(comp + 0x30, 31);  // "points" somewhere, for the probe
 
             var (us, usTeams) = MakeClub("Testford United", "Testford", new[] { 0, 10 }, comp, gameDate, 6500);
             var (rival, rivalTeams) = MakeClub("Rival FC", "Rival", new[] { 0 }, comp, gameDate, 5000);
             ulong other = MakeClub("Third Club", "Third", new[] { 0 }, comp, gameDate, 3000).teams[0];
+
+            // League table: comp → running competition → [a broken league stage, the real one] → rows (Rival 1st, us 2nd, Third 3rd)
+            MakeLeague(comp, new[] { (rivalTeams[0], (4, 1, 0, 9, 3), (3, 1, 1, 7, 4)), (usTeams[0], (4, 0, 1, 10, 4), (2, 2, 1, 6, 6)),
+                                     (other, (1, 1, 3, 4, 9), (0, 2, 3, 2, 8)) });
 
             // Real finance record at club+0x150
             ulong finance = _heap.Alloc(0x900);
@@ -280,6 +300,45 @@ public static class Program
             for (int i = 0; i < 200; i++) _heap.W64(_heap.Alloc(16), _gp.Base + (ulong)(i * 8 + 0x8000));
             ulong decoy = _heap.Alloc(0x40); _heap.W64(decoy, _vtDecoy); _heap.W32(decoy + 0x0C, 5);
             ulong staff = _heap.Alloc(0x200) + 0x100; _heap.W64(staff, _vtStaff); _heap.W32(staff + 0x0C, 6);
+        }
+
+        /// <summary>A running competition with two league stages: the first has a row that doesn't add up (must be skipped).</summary>
+        private void MakeLeague(ulong comp, (ulong team, (int w, int d, int l, int gf, int ga) home, (int w, int d, int l, int gf, int ga) away)[] table)
+        {
+            ulong vtActual = MakeNamedVtable(6, 0, ".?AVACTUAL_COMP@sicomps@@");
+            ulong vtStage = MakeNamedVtable(7, 0, ".?AVLEAGUE_STAGE@sicomps@@");
+            ulong actual = _heap.Alloc(0x200); _heap.W64(actual, vtActual);
+            _heap.W64(comp + (ulong)L.CompActual, actual);
+            void Rec(ulong a, int w, int d, int l, int gf, int ga)
+            {
+                _heap.W16(a + (ulong)L.RecGoalsFor, (ushort)gf); _heap.W16(a + (ulong)L.RecGoalsAgainst, (ushort)ga);
+                _heap.W16(a + (ulong)L.RecPoints, (ushort)(3 * w + d));
+                _heap.W8(a + (ulong)L.RecPlayed, (byte)(w + d + l)); _heap.W8(a + (ulong)L.RecWon, (byte)w);
+                _heap.W8(a + (ulong)L.RecDrawn, (byte)d); _heap.W8(a + (ulong)L.RecLost, (byte)l);
+            }
+            ulong Stage(bool broken)
+            {
+                ulong stage = _heap.Alloc(0x200); _heap.W64(stage, vtStage);
+                ulong list = _heap.Alloc(8 * table.Length);
+                for (int i = 0; i < table.Length; i++)
+                {
+                    var (team, h, a) = table[i];
+                    ulong row = _heap.Alloc(0x100);
+                    _heap.W64(row + (ulong)L.RowTeam, team);
+                    Rec(row + (ulong)L.RowHome, h.w, h.d, h.l, h.gf, h.ga);
+                    Rec(row + (ulong)L.RowAway, a.w, a.d, a.l, a.gf, a.ga);
+                    Rec(row + (ulong)L.RowOverall, h.w + a.w, h.d + a.d, h.l + a.l + (broken ? 1 : 0), h.gf + a.gf, h.ga + a.ga);
+                    _heap.W64(list + (ulong)(8 * i), row);
+                }
+                _heap.W64(stage + (ulong)L.StageRows, list);
+                _heap.W64(stage + (ulong)L.StageRows + 8, list + (ulong)(8 * table.Length));
+                return stage;
+            }
+            ulong stages = _heap.Alloc(16);
+            _heap.W64(stages, Stage(broken: true));
+            _heap.W64(stages + 8, Stage(broken: false));
+            _heap.W64(actual + (ulong)L.ActualStages, stages);
+            _heap.W64(actual + (ulong)L.ActualStages + 8, stages + 16);
         }
 
         public static uint PersonIdOf(uint uid) => 70_000 + uid;   // the game's person id, different from the unique id

@@ -138,14 +138,21 @@ public sealed class LeagueTableInfo
 {
     public bool Mapped = false;
     public string Competition;
-    public string Note = "League table is not mapped yet (no open-source editor has it either). Run the probe (README) with your points and goal difference.";
+    public string Note = "The league table could not be read (details in diagnostics.txt).";
     public List<LeagueRow> Rows = new();
 }
 
 public sealed class LeagueRow
 {
-    public int Position, Played, Points, GoalDifference;
+    public int Position, Played, Won, Drawn, Lost, GoalsFor, GoalsAgainst, GoalDifference, Points;
     public string Club;
+    public bool IsUs;
+    public LeagueRecord Home, Away;
+}
+
+public sealed class LeagueRecord
+{
+    public int Played, Won, Drawn, Lost, GoalsFor, GoalsAgainst, Points;
 }
 
 public sealed class ShortlistMiss

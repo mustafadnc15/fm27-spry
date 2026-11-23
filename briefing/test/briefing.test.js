@@ -159,3 +159,30 @@ test('attributes-only view: ratings instead of CA, no PA, no hidden attributes',
   assert.strictEqual(d.squad[0].pa, 129, 'original dump must not be modified');
   assert.ok(estimateTokens(text) <= 3000);
 });
+
+test('league table: every team listed, ours marked, gaps and home/away summary', () => {
+  const rec = (w, d, l, gf, ga) => ({ played: w + d + l, won: w, drawn: d, lost: l, goalsFor: gf, goalsAgainst: ga, points: 3 * w + d });
+  const row = (position, club, isUs, home, away) => ({
+    position, club, isUs, home, away, played: home.played + away.played, won: home.won + away.won, drawn: home.drawn + away.drawn,
+    lost: home.lost + away.lost, goalsFor: home.goalsFor + away.goalsFor, goalsAgainst: home.goalsAgainst + away.goalsAgainst,
+    goalDifference: home.goalsFor + away.goalsFor - home.goalsAgainst - away.goalsAgainst, points: home.points + away.points,
+  });
+  const lt = { mapped: true, competition: 'Test Lig', rows: [
+    row(1, 'Leaders FC', false, rec(2, 0, 0, 5, 1), rec(1, 1, 0, 3, 2)),
+    row(2, 'Us United', true, rec(2, 0, 0, 4, 0), rec(0, 1, 1, 1, 3)),
+    row(3, 'Third Town', false, rec(1, 0, 1, 2, 2), rec(0, 0, 2, 0, 4)),
+  ] };
+  const lines = require('../briefing').leagueTableLines(lt);
+  assert.match(lines[0], /LEAGUE TABLE: Test Lig/);
+  assert.strictEqual(lines.filter(l => /^\s*\d+\. |^>>/.test(l)).length, 3);
+  assert.match(lines[2], /^>> 2\. Us United 4 2 1 1 5-3 \+2 7$/);
+  const you = lines[lines.length - 1];
+  assert.match(you, /You: 2\. of 3, 7 pts, 3 pts behind the leader, 4 ahead of Third Town \(3\.\)/);
+  assert.match(you, /Home 2-0-0 \(4-0, 6 pts\), away 0-1-1 \(1-3, 1 pts\)/);
+  assert.ok(!you.includes('About'), 'all 4 games played: no games-left note');
+
+  const d = fixture(); d.leagueTable = lt;
+  assert.ok(buildBriefing(d).includes('>> 2. Us United'));
+  d.leagueTable = { mapped: false, note: 'reason here', rows: [] };
+  assert.ok(buildBriefing(d).includes('League table: not available (reason here)'));
+});

@@ -178,7 +178,11 @@ public static class Probe
         var parts = path.Replace("→", " ").Replace("->", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0) return sb.ToString();
         var root = roots.FirstOrDefault(r => r.name.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
-        if (root.addr == 0) { sb.AppendLine($"Unknown root '{parts[0]}'. Use one of: {string.Join(", ", roots.Select(r => r.name))}"); return sb.ToString(); }
+        // A raw address (from classes.txt) also works as a start: "0x1F2E3D4C5B0 +0x40".
+        if (root.addr == 0 && parts[0].StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            && ulong.TryParse(parts[0].Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong raw))
+            root = (parts[0], raw);
+        if (root.addr == 0) { sb.AppendLine($"Unknown root '{parts[0]}'. Use one of: {string.Join(", ", roots.Select(r => r.name))}, or an address like 0x1A2B3C4D50 from classes.txt"); return sb.ToString(); }
         ulong addr = root.addr;
         foreach (string p in parts.Skip(1))
         {
@@ -206,6 +210,7 @@ public static class Probe
     private static string Label(Mem m, Layout L, ScanResult scan, PlayerReader reader, ulong v)
     {
         if (v < 0x10000 || (v & 7) != 0) return "";
+        if (scan.VtableNames.TryGetValue(v, out string vtName)) return "vtable: " + vtName;
         if (scan.AddrToUid.TryGetValue(v, out uint uid) && scan.Players.TryGetValue(uid, out var pr))
             return "player: " + (reader.Name(pr.Person) ?? uid.ToString());
         // A team: its club's team list contains it.
@@ -217,6 +222,7 @@ public static class Probe
         string asClub = reader.ClubName(v);
         if (asClub != null && m.Ptr(v + (ulong)L.ClubTeamsEnd) > m.Ptr(v + (ulong)L.ClubTeamsBegin))
             return "club: " + asClub;
+        if (scan.VtableNames.TryGetValue(m.Ptr(v), out string objName)) return "object: " + objName;
         string text = m.CString(v + 4, 64);
         if (text != null && text.Length >= 3 && text.Count(char.IsLetter) >= 3) return $"text: \"{text}\"";
         return "";

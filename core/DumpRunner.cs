@@ -140,6 +140,10 @@ public static class DumpRunner
             catch (Exception e) { diag.Add("Tactic reading failed: " + e.Message); }
             if (dump.Tactic == null) dump.Notes.Add("Your tactic could not be read from memory (tactic.txt still works).");
 
+            // Your league table. Optional too.
+            try { dump.LeagueTable = LeagueTableReader.Read(mem, layout, scan, ctx, dump.LeagueTable.Competition, diag); }
+            catch (Exception e) { diag.Add("League table reading failed: " + e.Message); }
+
             WriteAtomic(Path.Combine(s.OutDir, "dump-latest.json"), JsonSerializer.Serialize(dump, Json));
 
             if (s.ExportDatabase)
@@ -244,6 +248,27 @@ public static class DumpRunner
         }
     }
 
+    /// <summary>
+    /// classes.txt: every C++ class seen on the heap, how many objects, and up to 3 addresses.
+    /// Used to find structures nobody has mapped yet (e.g. the league table): pick a class by name,
+    /// then dump one object with ProbeInspect = 0x&lt;address&gt;. Addresses change every time FM starts.
+    /// </summary>
+    private static void WriteClasses(Settings s, ScanResult scan)
+    {
+        try
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"C++ classes on FM's heap, {DateTime.Now:yyyy-MM-dd HH:mm:ss}. Count, name, sample addresses (valid until FM restarts).");
+            foreach (var kv in scan.VtableCounts.OrderBy(kv => scan.VtableNames.GetValueOrDefault(kv.Key), StringComparer.Ordinal))
+            {
+                string samples = scan.VtableSamples.TryGetValue(kv.Key, out var list) ? string.Join(" ", list.Select(a => $"0x{a:X}")) : "";
+                sb.AppendLine($"{kv.Value,10}  {scan.VtableNames.GetValueOrDefault(kv.Key) ?? "?"}  {samples}");
+            }
+            WriteAtomic(Path.Combine(s.OutDir, "classes.txt"), sb.ToString());
+        }
+        catch { }
+    }
+
     private static void WriteDiagnostics(Settings s, Status st, Layout layout, ScanResult scan, List<string> diag, Dump dump)
     {
         try
@@ -270,6 +295,8 @@ public static class DumpRunner
                               $"Your tactic is read from {layout.SelectionClass} ({scan.Selections.Count} found).");
                 foreach (var kv in scan.VtableCounts.OrderByDescending(kv => kv.Value).Take(40))
                     sb.AppendLine($"  {kv.Value,10:N0}  {scan.VtableNames.GetValueOrDefault(kv.Key) ?? "?"}");
+                sb.AppendLine("The full list, with sample addresses for ProbeInspect, is in classes.txt.");
+                WriteClasses(s, scan);
             }
             if (dump.Squad.Count > 0)
             {
