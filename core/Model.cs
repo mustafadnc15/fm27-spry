@@ -134,7 +134,8 @@ public sealed class TransferInfo
     public string Player;
     public string From;
     public string To;
-    public string Status;         // completed / agreed / rejected / other(0xNN)
+    public string Status;         // arranged (future move) / completed / agreed / rejected / other(0xNN)
+    public int StatusCode;        // FM's raw status byte
     public string Date;           // date the move takes effect
     public string Involves;       // "incoming", "outgoing", "shortlist"
 }

@@ -142,7 +142,7 @@ public sealed class ClubDumper
         var shortlistUids = new Shortlist(_m, reader, _scan, _settings, _diag).Resolve(dump);
 
         // ---------- 7. Transfer activity ----------
-        ReadTransfers(dump, reader, teams.Select(t => t.ptr).ToHashSet(), shortlistUids);
+        ReadTransfers(dump, reader, teams.Select(t => t.ptr).ToHashSet(), shortlistUids, today);
 
         return ctx;
     }
@@ -223,7 +223,7 @@ public sealed class ClubDumper
         return list;
     }
 
-    private void ReadTransfers(Dump dump, PlayerReader reader, HashSet<ulong> ourTeams, HashSet<uint> shortlist)
+    private void ReadTransfers(Dump dump, PlayerReader reader, HashSet<ulong> ourTeams, HashSet<uint> shortlist, DateTime today)
     {
         var teamName = new Dictionary<ulong, string>();
         string NameOfTeam(ulong t)
@@ -242,6 +242,9 @@ public sealed class ClubDumper
             string to = NameOfTeam(d.ToTeam), from = NameOfTeam(d.FromTeam);
             if (to == null || from == null || to == from) continue;   // renewals / internal moves
             string status = d.Status switch { 0x14 => "completed", 0x13 => "agreed", 0x0F => "rejected", _ => $"other(0x{d.Status:X2})" };
+            // A done deal dated in the future hasn't happened yet: FM shows it as "transfer arranged" (Trn).
+            var when = FmDate.ToDate(d.Date);
+            if ((d.Status == 0x14 || d.Status == 0x13) && when is DateTime w && w.Date > today.Date) status = "arranged";
             if (!seen.Add((uid, to, from, status))) continue;
             dump.Transfers.Add(new TransferInfo
             {
@@ -249,12 +252,22 @@ public sealed class ClubDumper
                 Player = _scan.Players.TryGetValue(uid, out var pr) ? reader.Name(pr.Person) : null,
                 From = from, To = to, Status = status,
                 Date = FmDate.ToIso(d.Date),
+                StatusCode = d.Status,
                 Involves = incoming ? "incoming" : outgoing ? "outgoing" : "shortlist",
             });
         }
         dump.Transfers = dump.Transfers.OrderByDescending(t => t.Date ?? "").Take(60).ToList();
         _diag.Add($"Deal records: {_scan.Deals.Count} found, {relevant} involve you or your shortlist, {dump.Transfers.Count} written.");
-        dump.Notes.Add("Transfer fees are not included (FM's fee field is unreliable). 'other' statuses are offers/negotiations whose code is not decoded yet.");
+        dump.Notes.Add("Transfer fees are not included (FM's fee field is unreliable). 'arranged' = agreed move that takes effect on 'date'. 'other' statuses are offers/negotiations whose code is not decoded yet.");
+
+        // FM also sets the "listed" bit while a transfer is arranged; don't call those players transfer-listed.
+        var arrangedUids = dump.Transfers.Where(t => t.Status == "arranged").Select(t => t.PlayerUid).ToHashSet();
+        foreach (var p in dump.Squad.Concat(dump.Shortlist))
+            if (p.Contract != null && p.Contract.TransferListed && arrangedUids.Contains(p.Uid))
+            {
+                p.Contract.TransferListed = false;
+                p.Notes.Add("Transfer arranged (FM shows 'Trn').");
+            }
     }
 
     public static string TeamLabel(int type) => type switch

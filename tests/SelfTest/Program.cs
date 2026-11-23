@@ -99,7 +99,10 @@ public static class Program
         var transfers = json.GetProperty("transfers").EnumerateArray().ToList();
         Check("3 relevant transfers (in, out, shortlist; unrelated deals ignored)", transfers.Count == 3);
         Check("shortlist player's move included", transfers.Any(t => t.GetProperty("player").GetString() == "Other Striker" && t.GetProperty("involves").GetString() == "shortlist"));
-        Check("incoming agreed", transfers.Any(t => t.GetProperty("player").GetString() == "Test Striker" && t.GetProperty("status").GetString() == "agreed" && t.GetProperty("involves").GetString() == "incoming"));
+        Check("future deal = arranged", transfers.Any(t => t.GetProperty("player").GetString() == "Test Striker" && t.GetProperty("status").GetString() == "arranged" && t.GetProperty("involves").GetString() == "incoming"));
+        var tsJson = json.GetProperty("shortlist").EnumerateArray().First(p => p.GetProperty("name").GetString() == "Test Striker");
+        Check("arranged transfer is not 'transfer-listed'", !tsJson.GetProperty("contract").GetProperty("transferListed").GetBoolean()
+              && tsJson.GetProperty("notes").EnumerateArray().Any(n => n.GetString().Contains("Trn")));
         Check("outgoing completed", transfers.Any(t => t.GetProperty("player").GetString() == "Ace Player" && t.GetProperty("status").GetString() == "completed" && t.GetProperty("to").GetString() == "Rival FC"));
 
         string probe = File.ReadAllText(Path.Combine(outDir, "probe.txt"));
@@ -214,7 +217,7 @@ public static class Program
             ulong loanRec = _heap.Alloc(0x20);
             _heap.W64(loanRec, loanCon);
             _heap.W64(far + (ulong)L.LoanRecord, loanRec);
-            ulong ts = MakePlayer("Test", "Striker", new DateTime(1999, 1, 1), 160, 165, rivalTeams[0], 70_000, 0, "ST", null, out _);
+            ulong ts = MakePlayer("Test", "Striker", new DateTime(1999, 1, 1), 160, 165, rivalTeams[0], 70_000, 0x01, "ST", null, out _);
             ulong os = MakePlayer("Other", "Striker", new DateTime(1998, 1, 1), 110, 115, rivalTeams[0], 9_000, 0, "ST", null, out _);
             MakePlayer("Random", "Bloke", new DateTime(1990, 1, 1), 90, 90, other, 2_000, 0, "MR", null, out _);
 

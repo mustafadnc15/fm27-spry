@@ -56,7 +56,7 @@ test('squad status vs best XI is flagged', () => {
 test('shortlist shows loans and arranged transfers', () => {
   const d = fixture();
   d.shortlist[0].onLoanAt = 'FC Barcelona'; d.shortlist[0].loanEnds = '2027-06-30';
-  d.transfers.push({ playerUid: d.shortlist[0].uid, player: 'Target Striker', from: 'Rival FC', to: 'Big Club', status: 'agreed', date: '2027-07-01', involves: 'shortlist' });
+  d.transfers.push({ playerUid: d.shortlist[0].uid, player: 'Target Striker', from: 'Rival FC', to: 'Big Club', status: 'arranged', date: '2027-07-01', involves: 'shortlist' });
   const text = buildBriefing(d);
   assert.ok(text.includes('(Rival FC, on loan at FC Barcelona until 2027-06-30)'));
   assert.ok(text.includes('ALREADY ARRANGED: moving to Big Club on 2027-07-01'));

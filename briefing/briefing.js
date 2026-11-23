@@ -331,7 +331,7 @@ function buildBriefing(dump, opts = {}) {
       `${monthsLeft != null && monthsLeft <= 6 ? ' (could come on a pre-contract/free)' : monthsLeft != null && monthsLeft <= 12 ? ' (final year: cheaper)' : ''}` +
       `${p.contract && p.contract.transferListed ? '; transfer-listed' : ''}${p.contract && p.contract.loanListed ? '; loan-listed' : ''}` +
       `${p.contract && p.contract.squadStatus ? `; status at his club: ${p.contract.squadStatus}` : ''}`);
-    const arranged = (dump.transfers || []).filter(t => t.playerUid === p.uid && t.status === 'agreed');
+    const arranged = (dump.transfers || []).filter(t => t.playerUid === p.uid && (t.status === 'arranged' || t.status === 'agreed'));
     if (arranged.length) line(`  ALREADY ARRANGED: moving to ${arranged.map(t => `${t.to}${t.date ? ` on ${t.date}` : ''}`).join(', ')}`);
     const f = view.flags(p);
     line(`  character: ${f.length ? f.join(', ') : 'no red or green flags'}`);
