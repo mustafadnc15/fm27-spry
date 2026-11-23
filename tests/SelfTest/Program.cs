@@ -70,7 +70,8 @@ public static class Program
             Check("ace accomplished AMC", ace.GetProperty("accomplishedPositions").EnumerateArray().Any(x => x.GetString() == "AMC"));
             Check("ace contract", ace.GetProperty("contract").GetProperty("wageWeekly").GetInt64() == 50_000
                                   && ace.GetProperty("contract").GetProperty("expires").GetString() == "2029-06-30"
-                                  && ace.GetProperty("contract").GetProperty("transferListed").GetBoolean());
+                                  && ace.GetProperty("contract").GetProperty("transferListed").GetBoolean()
+                                  && ace.GetProperty("contract").GetProperty("squadStatus").GetString() == "regular starter");
             Check("ace nationality", ace.GetProperty("nationality").GetString() == "Testland");
             Check("ace first team", ace.GetProperty("team").GetString() == "first team");
             Check("ace morale 7 = Slightly Poor", ace.GetProperty("morale").GetInt32() == 7 && ace.GetProperty("moraleLevel").GetString() == "Slightly Poor");
@@ -81,7 +82,8 @@ public static class Program
         var youth = squad.FirstOrDefault(p => p.GetProperty("name").GetString() == "Young Gun");
         Check("youth in youth team", youth.ValueKind == JsonValueKind.Object && youth.GetProperty("team").GetString() == "youth");
         var away = squad.FirstOrDefault(p => p.GetProperty("name").GetString() == "Far Away");
-        Check("out-on-loan player noted", away.ValueKind == JsonValueKind.Object && away.GetProperty("notes").GetArrayLength() == 1);
+        Check("out-on-loan player: loan club read", away.ValueKind == JsonValueKind.Object && away.GetProperty("onLoanAt").GetString() == "Rival FC"
+              && away.GetProperty("loanEnds").GetString() == "2027-06-30" && away.GetProperty("notes")[0].GetString().Contains("Out on loan at Rival FC"));
 
         var shortlist = json.GetProperty("shortlist").EnumerateArray().Select(p => p.GetProperty("name").GetString()).ToList();
         Check("shortlist has Test Striker", shortlist.Contains("Test Striker"));
@@ -128,6 +130,9 @@ public static class Program
         Check("hotkey parse Ctrl+F8", Hotkey.Parse("Ctrl+F8") is { Ctrl: true, VirtualKey: 0x77 });
         Check("hotkey parse rubbish", Hotkey.Parse("Banana") == null);
         Check("morale words", PlayerReader.MoraleWord(17) == "Excellent" && PlayerReader.MoraleWord(19) == "Exceptional" && PlayerReader.MoraleWord(4) == "between Very Poor and Quite Poor");
+        Check("club match 'man city'", Shortlist.ClubMatches("Manchester City", Shortlist.Normalize("Man City")));
+        Check("club match 'real'", Shortlist.ClubMatches("Real Madrid C.F.", "real"));
+        Check("club no false match", !Shortlist.ClubMatches("Manchester United", Shortlist.Normalize("Man City")));
         Check("normalize accents", Shortlist.Normalize("Martin Ødegaard ") == "martin odegaard");
         Check("probe value parse", Probe.ParseValues("balance=12,500,000; points=~24").Count == 2 && Probe.ParseValues("x=~5")[0].approx);
 
@@ -201,7 +206,13 @@ public static class Program
             ulong bee = MakePlayer("Bee", "Keeper", new DateTime(1995, 1, 1), 140, 145, usTeams[0], 20_000, 0, "GK", null, out _);
             ulong lou = MakePlayer("Lou", "Nee", new DateTime(2004, 1, 1), 120, 160, rivalTeams[0], 8_000, 0, "DC", null, out _);
             ulong yg = MakePlayer("Young", "Gun", new DateTime(2010, 2, 1), 70, 165, usTeams[0], 1_000, 0, "MC", null, out YouthUid);
-            MakePlayer("Far", "Away", new DateTime(2003, 1, 1), 100, 130, usTeams[0], 5_000, 0, "DL", null, out _);
+            ulong far = MakePlayer("Far", "Away", new DateTime(2003, 1, 1), 100, 130, usTeams[0], 5_000, 0, "DL", null, out _);
+            ulong loanCon = _heap.Alloc(0x80);
+            _heap.W64(loanCon + (ulong)L.ConTeam, rivalTeams[0]);
+            _heap.W32(loanCon + (ulong)L.ConExpiry, FmDate.FromDate(new DateTime(2027, 6, 30)));
+            ulong loanRec = _heap.Alloc(0x20);
+            _heap.W64(loanRec, loanCon);
+            _heap.W64(far + (ulong)L.LoanRecord, loanRec);
             ulong ts = MakePlayer("Test", "Striker", new DateTime(1999, 1, 1), 160, 165, rivalTeams[0], 70_000, 0, "ST", null, out _);
             ulong os = MakePlayer("Other", "Striker", new DateTime(1998, 1, 1), 110, 115, rivalTeams[0], 9_000, 0, "ST", null, out _);
             MakePlayer("Random", "Bloke", new DateTime(1990, 1, 1), 90, 90, other, 2_000, 0, "MR", null, out _);
@@ -290,6 +301,7 @@ public static class Program
             _heap.W32(con + (ulong)L.ConExpiry, FmDate.FromDate(new DateTime(2029, 6, 30)));
             _heap.W8(con + (ulong)L.ConSquadNumber, 9);
             _heap.W8(con + (ulong)L.ConFlags, flags);
+            _heap.W8(con + (ulong)L.ConSquadStatus, 3);
             _heap.W64(con + (ulong)L.ConTeam, team);
             _heap.W64(p + (ulong)L.Contract, con);
             return p;

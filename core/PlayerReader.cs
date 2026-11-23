@@ -88,12 +88,31 @@ public sealed class PlayerReader
                 WageWeekly = Money(_m.U32(con + (ulong)L.ConWage)),
                 Expires = FmDate.ToIso(_m.U32(con + (ulong)L.ConExpiry)),
                 SquadNumber = sq is >= 1 and <= 99 ? sq : null,
-                TransferListed = (flags & 0x01) != 0 || (flags & 0x08) != 0,
+                ListingFlagsRaw = flags,
+                TransferListed = (flags & 0x01) != 0,
                 LoanListed = (flags & 0x02) != 0,
-                NotForSale = (flags & 0x10) != 0,
-                ReleaseListed = (flags & 0x20) != 0,
             };
+            int ss = _m.U8(con + (ulong)L.ConSquadStatus);
+            if (ss is >= 1 and <= 30)
+            {
+                p.Contract.SquadStatusCode = ss;
+                p.Contract.SquadStatus = Layout.SquadStatusGroups.TryGetValue(ss, out var g) ? g : $"unknown ({ss})";
+            }
             p.Club = ClubName(ContractClub(person));
+        }
+
+        // Out on loan? person → loan record → loan contract → team → club
+        ulong rec = _m.Ptr(person + (ulong)L.LoanRecord);
+        ulong loan = rec == 0 ? 0 : _m.Ptr(rec);
+        if (loan != 0)
+        {
+            ulong team = _m.Ptr(loan + (ulong)L.ConTeam);
+            string at = team == 0 ? null : ClubName(_m.Ptr(team + (ulong)L.TeamClub));
+            if (at != null && at != p.Club)
+            {
+                p.OnLoanAt = at;
+                p.LoanEnds = FmDate.ToIso(_m.U32(loan + (ulong)L.ConExpiry));
+            }
         }
         return p;
     }

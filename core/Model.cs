@@ -70,6 +70,8 @@ public sealed class PlayerInfo
     public bool Female;
     public string Club;            // club holding the contract
     public string OnLoanFrom;      // set when he plays for you but is owned elsewhere
+    public string OnLoanAt;        // set when he is out on loan (club he plays for now)
+    public string LoanEnds;        // yyyy-mm-dd
     public string Team;            // which of your teams lists him (first team / reserves / youth)
     public int? TeamType;
     public int Ca, Pa;
@@ -99,7 +101,10 @@ public sealed class ContractInfo
     public long? WageWeekly;
     public string Expires;        // yyyy-mm-dd
     public int? SquadNumber;
-    public bool TransferListed, LoanListed, NotForSale, ReleaseListed;
+    public bool TransferListed, LoanListed;
+    public int ListingFlagsRaw;   // raw listing byte (bit 0 transfer listed, bit 1 loan listed; other bits being checked)
+    public int? SquadStatusCode;
+    public string SquadStatus;    // key player / regular starter / fringe / prospect / surplus / not needed
 }
 
 public sealed class LeagueTableInfo

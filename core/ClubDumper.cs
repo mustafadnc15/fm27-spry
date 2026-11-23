@@ -119,6 +119,8 @@ public sealed class ClubDumper
             if (listedIn.TryGetValue(uid, out int tt)) { p.TeamType = tt; p.Team = TeamLabel(tt); }
             if (!contractedSet.Contains(uid))
                 p.OnLoanFrom = p.Club ?? "another club";
+            else if (p.OnLoanAt != null)
+                p.Notes.Add($"Out on loan at {p.OnLoanAt}" + (p.LoanEnds != null ? $" until {p.LoanEnds}." : "."));
             else if (!listedIn.ContainsKey(uid))
                 p.Notes.Add("Under contract with you but not in any of your team lists: probably out on loan.");
             dump.Squad.Add(p);

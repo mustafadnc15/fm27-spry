@@ -38,10 +38,25 @@ public sealed class Layout
     public int Nation = 0x68;                                // ptr → nation
     public int DateOfBirth = 0x88;                           // FM date
     public int Contract = 0xA8;                              // ptr → contract
+    // Loans (FMLibreEditor + FM OpenEditor): [person+LoanRecord] → record; [record+0] → loan contract,
+    // laid out like a contract (+0x10 team he is on loan to, +0x48 loan end date).
+    public int LoanRecord = 0xB0;
     public int Personality = 0x70;                           // 8 raw bytes 1..20
 
     // ---- Contract ----
     public int ConWage = 0x20, ConExpiry = 0x48, ConSquadNumber = 0x5D, ConFlags = 0x57, ConTeam = 0x10, ConJob = 0x26;
+    // ConFlags bits: 0 = transfer listed, 1 = loan listed (confirmed by FMLibreEditor and FM OpenEditor).
+    public int ConSquadStatus = 0x54;   // byte code, grouped as in SquadStatusGroups below (FMLibreEditor census)
+
+    /// <summary>FM squad-status codes → group. Codes not listed are reported as "unknown (N)".</summary>
+    public static readonly Dictionary<int, string> SquadStatusGroups = new()
+    {
+        [1] = "key player", [2] = "key player", [15] = "key player",
+        [3] = "regular starter",
+        [4] = "fringe", [5] = "fringe", [7] = "fringe", [9] = "fringe", [14] = "fringe", [16] = "fringe", [17] = "fringe", [20] = "fringe", [21] = "fringe",
+        [10] = "prospect", [11] = "prospect", [13] = "prospect",
+        [22] = "surplus / not needed",
+    };
 
     // ---- Nation ----
     public int NationShortName = 0x20, NationName = 0x30;

@@ -86,7 +86,7 @@ public sealed class Shortlist
 
             var players = uids.Select(u => SafeRead(u)).Where(p => p != null).ToList();
             if (e.club != null)
-                players = players.Where(p => p.Club != null && Normalize(p.Club).Contains(e.club)).ToList();
+                players = players.Where(p => ClubMatches(p.Club, e.club)).ToList();
             if (players.Count == 0)
             {
                 dump.ShortlistNotFound.Add(new ShortlistMiss { Entry = e.raw, Reason = uids.Count == 0 ? "no player with this name/ID" : "name found, but not at that club" });
@@ -151,6 +151,19 @@ public sealed class Shortlist
         if (commentedNames.Count > 0)
             status += $". {commentedNames.Count} line(s) start with # and were IGNORED, e.g. {string.Join(", ", commentedNames.Take(3).Select(c => $"'{c}'"))}. Remove the # to use them.";
         return list;
+    }
+
+    /// <summary>
+    /// "Man City" matches "Manchester City", "Real" matches "Real Madrid C.F.": every word typed
+    /// must be the start of a word in the club's name (or the whole text appears in it).
+    /// </summary>
+    public static bool ClubMatches(string clubName, string typedNormalized)
+    {
+        if (clubName == null || string.IsNullOrEmpty(typedNormalized)) return false;
+        string club = Normalize(clubName);
+        if (club.Contains(typedNormalized)) return true;
+        var words = club.Split(' ');
+        return typedNormalized.Split(' ').All(t => words.Any(w => w.StartsWith(t)));
     }
 
     /// <summary>"Ødegaard" → "odegaard": no accents, lowercase, single spaces.</summary>

@@ -168,7 +168,7 @@ function buildBriefing(dump, opts = {}) {
   const today = meta.gameDate || (meta.generatedAt || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
 
   const all = (dump.squad || []).map(p => ({ ...p, ca: p.ca || 0, pa: p.pa || 0 }));
-  const outOnLoan = p => (p.notes || []).some(n => /out on loan/i.test(n));
+  const outOnLoan = p => !!p.onLoanAt || (p.notes || []).some(n => /out on loan/i.test(n));
   const available = all.filter(p => !outOnLoan(p));
   const senior = available.filter(p => p.teamType === 0 || p.teamType == null);
   const pool = senior.length >= 11 ? senior : available;
@@ -242,6 +242,12 @@ function buildBriefing(dump, opts = {}) {
     if (o.length < g.want) weak.push(`${g.label}: only ${o.length} of ${g.want} wanted options`);
     else if (o.length >= 2 && o[0].ca - o[1].ca >= 20) weak.push(`${g.label}: big drop behind ${o[0].name} (${view.ca(o[0].ca)} → ${view.ca(o[1].ca)})`);
   }
+  // Promised playing time vs reality (squad status from the contract)
+  for (const p of pool) {
+    const st = p.contract && p.contract.squadStatus;
+    if ((st === 'key player' || st === 'regular starter') && !xiIds.has(p.uid))
+      weak.push(`${p.name} has squad status "${st}" but is not in the best XI (playing-time promise at risk)`);
+  }
   (weak.length ? weak : ['none obvious']).forEach(w => line(`- ${w}`));
 
   // ---- contracts
@@ -314,7 +320,8 @@ function buildBriefing(dump, opts = {}) {
     const wage = p.contract && p.contract.wageWeekly;
     const wageVsTop = wage != null && top.length ? `${Math.round(100 * wage / top[0].contract.wageWeekly)}% of our top earner` : '';
 
-    line(`* ${p.name} ${p.age ?? '?'}y ${pos(p)} (${p.club || '?'}) CA${view.ca(p.ca)} PA${view.pa(p.pa)} ${ageStage(p.age)} | ${view.attrs(p)}`);
+    const owner = p.onLoanAt ? `${p.club || '?'}, on loan at ${p.onLoanAt}${p.loanEnds ? ` until ${p.loanEnds}` : ''}` : (p.club || '?');
+    line(`* ${p.name} ${p.age ?? '?'}y ${pos(p)} (${owner}) CA${view.ca(p.ca)} PA${view.pa(p.pa)} ${ageStage(p.age)} | ${view.attrs(p)}`);
     const upgrade = bestSlot
       ? (bestSlot.s.p ? `vs our ${bestSlot.s.slot} ${bestSlot.s.p.name} CA${view.ca(bestSlot.s.p.ca)}: ${bestSlot.gain >= 5 ? 'UPGRADE' : bestSlot.gain >= -5 ? 'similar level' : 'NOT an upgrade'} (${bestSlot.gain >= 0 ? '+' : ''}${Math.round(bestSlot.gain)})`
                       : `fills an empty ${bestSlot.s.slot} slot`)
@@ -322,7 +329,10 @@ function buildBriefing(dump, opts = {}) {
     line(`  fit: ${upgrade}${rank ? `; would rank #${rank} in our ${grp.label}` : ''}`);
     line(`  money: ${afford}; wage ${money(wage)}/w${wageVsTop ? ` (${wageVsTop})` : ''}; contract ends ${(p.contract && p.contract.expires) || '?'}` +
       `${monthsLeft != null && monthsLeft <= 6 ? ' (could come on a pre-contract/free)' : monthsLeft != null && monthsLeft <= 12 ? ' (final year: cheaper)' : ''}` +
-      `${p.contract && p.contract.notForSale ? '; NOT FOR SALE' : ''}${p.contract && p.contract.transferListed ? '; transfer-listed' : ''}`);
+      `${p.contract && p.contract.transferListed ? '; transfer-listed' : ''}${p.contract && p.contract.loanListed ? '; loan-listed' : ''}` +
+      `${p.contract && p.contract.squadStatus ? `; status at his club: ${p.contract.squadStatus}` : ''}`);
+    const arranged = (dump.transfers || []).filter(t => t.playerUid === p.uid && t.status === 'agreed');
+    if (arranged.length) line(`  ALREADY ARRANGED: moving to ${arranged.map(t => `${t.to}${t.date ? ` on ${t.date}` : ''}`).join(', ')}`);
     const f = view.flags(p);
     line(`  character: ${f.length ? f.join(', ') : 'no red or green flags'}`);
   });
@@ -341,7 +351,7 @@ function buildBriefing(dump, opts = {}) {
   const rows = [...all].sort((a, b) => (a.teamType ?? 50) - (b.teamType ?? 50) || b.ca - a.ca).map(p =>
     `${p.name} ${p.age ?? '?'}y ${pos(p)} CA${view.ca(p.ca)} PA${view.pa(p.pa)} ${money(p.contract && p.contract.wageWeekly)}/w ` +
     `to ${((p.contract && p.contract.expires) || '?').slice(0, 7)} mor${p.morale ?? '?'}` +
-    `${p.onLoanFrom ? ' [loan in]' : ''}${outOnLoan(p) ? ' [loaned out]' : ''}${p.teamType >= 10 ? ' [youth]' : ''}`);
+    `${p.onLoanFrom ? ' [loan in]' : ''}${p.onLoanAt ? ` [loaned to ${p.onLoanAt}]` : outOnLoan(p) ? ' [loaned out]' : ''}${p.teamType >= 10 ? ' [youth]' : ''}`);
   let squadBlock = '';
   for (let n = rows.length; n >= 0; n--) {
     const shown = rows.slice(0, n);

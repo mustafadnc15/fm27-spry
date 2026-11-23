@@ -3,7 +3,7 @@ namespace TrueDoF;
 /// <summary>Options for one dump. The plugin fills these from the BepInEx config file.</summary>
 public sealed class Settings
 {
-    public const string ToolVersion = "0.1.3";
+    public const string ToolVersion = "0.1.4";
 
     public string Host = "plugin";
     public string OutDir = DefaultOutDir();
